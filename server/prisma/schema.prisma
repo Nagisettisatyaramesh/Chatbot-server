@@ -1,0 +1,259 @@
+// AI Website Assistant - Data model
+// NOTE: Default datasource is SQLite for zero-setup local development.
+// For production, switch provider to "postgresql" and set DATABASE_URL
+// accordingly (schema is written to be portable — no SQLite-only features
+// are relied upon other than the absence of native enums, which are
+// modelled as validated strings so the same schema works on both).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Tenants
+// ---------------------------------------------------------------------
+
+model Customer {
+  id          String   @id @default(cuid())
+  clientId    String   @unique // public-facing id used in the embed script, e.g. "PHOTOGRAPHY_001"
+  businessName String
+  description String?
+  websiteUrl  String?
+  category    String?
+  address     String?
+  phone       String?
+  email       String?
+  whatsapp    String?
+  businessHours String?
+  logoUrl     String?
+
+  status      String   @default("ACTIVE") // ACTIVE | DISABLED
+  plan        String   @default("STARTER") // STARTER | BUSINESS | PREMIUM
+  messageLimit Int     @default(1000)
+  messagesUsed Int     @default(0)
+  usagePeriodStart DateTime @default(now())
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  adminUsers      AdminUser[]
+  chatbotSettings ChatbotSettings?
+  knowledgeItems  KnowledgeItem[]
+  documents       Document[]
+  websiteImports  WebsiteImportJob[]
+  conversations   Conversation[]
+  messages        Message[]
+  leads           Lead[]
+  unansweredQuestions UnansweredQuestion[]
+  auditLogs       AuditLog[]
+
+  @@index([status])
+}
+
+model AdminUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  passwordHash String
+  role        String   @default("OWNER") // OWNER | STAFF | SUPER_ADMIN
+  customerId  String?  // null for SUPER_ADMIN
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  lastLoginAt DateTime?
+
+  @@index([customerId])
+}
+
+// ---------------------------------------------------------------------
+// Chatbot configuration
+// ---------------------------------------------------------------------
+
+model ChatbotSettings {
+  id          String   @id @default(cuid())
+  customerId  String   @unique
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  botName     String   @default("Assistant")
+  welcomeMessage String @default("Hi! 👋 How can I help you today?")
+  avatarUrl   String?
+  primaryColor String  @default("#4F46E5")
+  buttonColor  String  @default("#4F46E5")
+  quickReplies String  @default("[]") // JSON array of strings, serialized (SQLite-safe)
+  enabled     Boolean  @default(true)
+
+  // Human handoff configuration — never hardcoded, always sourced here
+  handoffWhatsapp   String?
+  handoffPhone      String?
+  handoffEmail      String?
+  handoffEnquiryUrl String?
+
+  leadCaptureEnabled Boolean @default(true)
+
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------
+// Knowledge base (strictly scoped by customerId everywhere)
+// ---------------------------------------------------------------------
+
+model KnowledgeItem {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  type        String   // ABOUT | SERVICE | FAQ | POLICY | DOCUMENT_CHUNK | WEBSITE
+  title       String
+  content     String
+  price       String?
+  status      String   @default("ACTIVE") // ACTIVE | DRAFT | ARCHIVED
+  source      String   @default("MANUAL") // MANUAL | WEBSITE | DOCUMENT
+
+  documentId  String?
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  websiteImportId String?
+  websiteImport   WebsiteImportJob? @relation(fields: [websiteImportId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([customerId, status])
+  @@index([customerId, type])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  filename    String
+  fileUrl     String
+  mimeType    String
+  sizeBytes   Int
+  status      String   @default("PROCESSING") // PROCESSING | READY | FAILED
+  errorMessage String?
+
+  createdAt   DateTime @default(now())
+
+  chunks      KnowledgeItem[]
+
+  @@index([customerId])
+}
+
+model WebsiteImportJob {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  url         String
+  status      String   @default("PENDING") // PENDING | CRAWLING | REVIEW | FAILED
+  pagesFound  Int      @default(0)
+  errorMessage String?
+  createdAt   DateTime @default(now())
+
+  items       KnowledgeItem[]
+
+  @@index([customerId])
+}
+
+// ---------------------------------------------------------------------
+// Conversations / messages / leads (all customerId-scoped)
+// ---------------------------------------------------------------------
+
+model Conversation {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  visitorId   String
+  status      String   @default("OPEN") // OPEN | HANDED_OFF | CLOSED
+  leadStage   String?  // used for the lead-capture mini state machine, null when inactive
+
+  startedAt   DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages    Message[]
+  leads       Lead[]
+
+  @@index([customerId, startedAt])
+  @@index([customerId, visitorId])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  role        String   // USER | ASSISTANT | SYSTEM
+  content     String
+  wasFallback Boolean  @default(false)
+  confidence  Float?
+
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([conversationId])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  name        String?
+  mobile      String?
+  email       String?
+  requirement String?
+  message     String?
+  status      String   @default("NEW") // NEW | CONTACTED | CONVERTED | CLOSED
+
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, status])
+}
+
+model UnansweredQuestion {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  question    String
+  occurrences Int      @default(1)
+  resolved    Boolean  @default(false)
+  lastAskedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, resolved])
+}
+
+// ---------------------------------------------------------------------
+// Super admin: plans + audit log for cross-tenant access
+// ---------------------------------------------------------------------
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  messageLimit Int
+  priceMonthly Float   @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorEmail  String
+  actorRole   String
+  action      String
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  @@index([customerId])
+}

@@ -1,0 +1,30 @@
+import { Request, Response, NextFunction } from "express";
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export function notFoundHandler(_req: Request, res: Response) {
+  res.status(404).json({ error: "Not found" });
+}
+
+// Never leak stack traces or internal details to clients -- this is the
+// last line of defense against accidentally exposing internal config.
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  const status = err instanceof ApiError ? err.status : 500;
+  const message = err instanceof ApiError ? err.message : "Internal server error";
+  if (status >= 500) {
+    console.error("[error]", err);
+  }
+  res.status(status).json({ error: message });
+}
+
+export function asyncHandler<T extends (req: Request, res: Response, next: NextFunction) => Promise<unknown>>(fn: T) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next);
+  };
+}

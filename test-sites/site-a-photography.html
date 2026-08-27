@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Lumière Photography Studio — Website A</title>
+<style>
+  body { font-family: Georgia, serif; margin: 0; background: #fdfaf5; color: #2b2b2b; }
+  header { padding: 60px 40px; text-align: center; background: linear-gradient(135deg,#7c3aed,#9333EA); color: #fff; }
+  header h1 { margin: 0 0 8px; font-size: 36px; }
+  main { max-width: 800px; margin: 40px auto; padding: 0 24px; line-height: 1.7; }
+  h2 { color: #7c3aed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lumière Photography Studio</h1>
+  <p>Capturing your story, one frame at a time.</p>
+</header>
+<main>
+  <h2>About Us</h2>
+  <p>This is a demo of "Website A" — a photography business with its own AI chatbot, embedded via the widget script below. This page's host CSS intentionally uses a very different font/color scheme than the chatbot to demonstrate Shadow DOM style isolation.</p>
+  <h2>Try asking the chatbot</h2>
+  <ul>
+    <li>What services do you provide?</li>
+    <li>How much does a wedding shoot cost?</li>
+    <li>Do you have deluxe rooms with sea view? (should NOT know — that's Website B's business)</li>
+  </ul>
+</main>
+
+<script src="http://localhost:4000/widget.js" data-client-id="PHOTOGRAPHY_001" data-api-base="http://localhost:4000"></script>
+</body>
+</html>
