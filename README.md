@@ -36,19 +36,23 @@ getting `404` when probing another tenant's knowledge item by id. See
 ## Project layout
 
 ```
-server/   Express + TypeScript API, Prisma (SQLite for dev), Claude integration
+server/   Express + TypeScript API, Prisma (PostgreSQL), Claude integration
 widget/   The embeddable widget.js (Shadow DOM, esbuild bundle)
 admin/    React + Vite + Tailwind admin portal (customer + super admin)
-test-sites/  Two demo HTML pages used to manually verify isolation
+test-sites/  Demo HTML pages used to manually verify isolation
 ```
 
 ## Getting started
 
-Prerequisites: Node.js 18+.
+Prerequisites: Node.js 18+, a PostgreSQL database (local install, or point
+`DATABASE_URL` at a hosted one -- e.g. the one Railway provisions, see
+"Deploying" below). For zero-setup local dev without installing Postgres,
+you can instead set `provider = "sqlite"` in `prisma/schema.prisma` and use
+`DATABASE_URL="file:./dev.db"`.
 
 ```bash
 npm install
-cd server && npx prisma migrate dev && npx prisma db seed && cd ..
+cd server && npx prisma db push && npx prisma db seed && cd ..
 npm run build:widget
 npm run dev:server    # http://localhost:4000
 npm run dev:admin     # http://localhost:5173
@@ -59,8 +63,9 @@ Seeded logins (from `server/prisma/seed.ts`):
 | Role | Email | Password | Notes |
 |---|---|---|---|
 | Super Admin | superadmin@aiwebsiteassistant.dev | SuperAdmin123! | sees all tenants |
-| Business owner | owner@lumierephoto.test | Password123! | clientId `PHOTOGRAPHY_001` |
-| Business owner | owner@seasidegrand.test | Password123! | clientId `HOTEL_002` |
+| Business owner (demo) | owner@lumierephoto.test | Password123! | clientId `PHOTOGRAPHY_001` |
+| Business owner (demo) | owner@seasidegrand.test | Password123! | clientId `HOTEL_002` |
+| Business owner (real) | owner@uniquecreations.test | TempPass123! | clientId `UNIQUE_CREATIONS_001` -- change this password in a real deployment |
 
 To see the widget answering real AI questions (not just the safe fallback),
 set `ANTHROPIC_API_KEY` in `server/.env` and restart the server. Without a
@@ -139,13 +144,31 @@ in embeddings (e.g. Voyage AI + pgvector) behind the same
 isolation guarantee lives in that function's `WHERE` clause, not in the
 ranking algorithm.
 
-## Moving to production
+## Deploying (Railway)
 
-- Switch `server/prisma/schema.prisma` datasource `provider` to
-  `"postgresql"` and point `DATABASE_URL` at a real Postgres instance (the
-  schema was written to avoid SQLite-only features).
-- Move file storage (`UPLOAD_DIR`) to S3 or equivalent object storage.
-- Put the server behind HTTPS; set `ADMIN_CORS_ORIGIN` to your real admin
-  domain.
-- Set a strong, unique `JWT_SECRET`.
+The backend (`server/`, which also serves `widget.js`) is deployed
+separately from any business's actual website -- the website only ever
+needs the one `<script>` tag from the Install Chatbot page, same as any
+third-party chat widget.
+
+1. Push this repo to GitHub (already done: `github.com/<you>/ai-website-assistant`).
+2. On [railway.app](https://railway.app), **New Project → Deploy from GitHub repo**,
+   select this repo, and set the service's **Root Directory** to `server`.
+3. **Add a PostgreSQL plugin** to the project -- Railway sets `DATABASE_URL` automatically.
+4. Set these environment variables on the service: `JWT_SECRET` (long random string),
+   `ANTHROPIC_API_KEY` (optional), `ADMIN_CORS_ORIGIN` (your deployed admin portal's URL),
+   `APP_BASE_URL` (this service's own public URL once assigned).
+5. Build command: `npm run build`. Start command: `node dist/index.js`
+   (`postinstall` already runs `prisma generate` automatically).
+6. One-time setup after the first deploy, via `railway run`:
+   `npx prisma db push` then `npx prisma db seed`.
+7. Deploy `admin/` separately (Vercel/Netlify work well for a static Vite
+   build) with `VITE_API_BASE_URL` set to the Railway service's public URL.
+
+## Further production hardening
+
+- Move file storage (`UPLOAD_DIR`) to S3 or equivalent object storage --
+  most PaaS containers (including Railway's default) have an ephemeral
+  filesystem, so uploaded documents won't survive a redeploy otherwise.
+- Set a strong, unique `JWT_SECRET` (not the local dev default).
 - Wire up real billing against the `Plan` model.

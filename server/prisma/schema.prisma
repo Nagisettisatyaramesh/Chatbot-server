@@ -1,16 +1,14 @@
 // AI Website Assistant - Data model
-// NOTE: Default datasource is SQLite for zero-setup local development.
-// For production, switch provider to "postgresql" and set DATABASE_URL
-// accordingly (schema is written to be portable — no SQLite-only features
-// are relied upon other than the absence of native enums, which are
-// modelled as validated strings so the same schema works on both).
+// Production datasource: PostgreSQL. The schema avoids native enums (kept
+// as validated strings) specifically so it also runs unmodified against
+// SQLite for zero-setup local dev -- see README.md for switching back.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

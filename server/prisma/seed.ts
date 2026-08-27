@@ -204,10 +204,96 @@ async function main() {
   });
   await upsertAdmin("owner@seasidegrand.test", "Password123!", "OWNER", hotel.id);
 
+  // ---------------------------------------------------------------
+  // Real customer: Unique Creations (photography2-two.vercel.app)
+  // ---------------------------------------------------------------
+  const uniqueCreations = await prisma.customer.upsert({
+    where: { clientId: "UNIQUE_CREATIONS_001" },
+    update: {},
+    create: {
+      clientId: "UNIQUE_CREATIONS_001",
+      businessName: "Unique Creations",
+      description:
+        "Unique Creations specializes in professional photography and videography, capturing weddings and a wide range of events with candid, cinematic storytelling.",
+      category: "Photography & Videography",
+      websiteUrl: "https://photography2-two.vercel.app/",
+      plan: "STARTER",
+      messageLimit: 1000,
+      chatbotSettings: {
+        create: {
+          botName: "Unique Creations Assistant",
+          welcomeMessage: "Hi! 👋 Welcome to Unique Creations. How can I help you plan your story today?",
+          primaryColor: "#111111",
+          buttonColor: "#111111",
+          quickReplies: JSON.stringify(["Our Services", "Get a Quote"]),
+          // DEMO values -- replace with the real WhatsApp/phone/enquiry link
+          // in the admin portal (Chatbot Settings) before real customers use this.
+          handoffWhatsapp: "+919000033333",
+          handoffPhone: "+919000033333",
+          handoffEnquiryUrl: "https://photography2-two.vercel.app/#contact",
+        },
+      },
+      knowledgeItems: {
+        create: [
+          {
+            type: "ABOUT",
+            title: "About Unique Creations",
+            content:
+              "Unique Creations is a wedding photography and videography studio based in Andhra Pradesh, specializing in candid, cinematic coverage of weddings and events -- from Haldi and makeover functions to the wedding day itself.",
+            status: "ACTIVE",
+          },
+          {
+            type: "SERVICE",
+            title: "Wedding Photography",
+            content: "A complete visual story of your celebration -- candid and traditional coverage that moves with the day rather than staging it.",
+            price: "Starting from ₹1,50,000",
+            status: "ACTIVE",
+          },
+          {
+            type: "SERVICE",
+            title: "Cinematic Wedding Films",
+            content: "Your day, cut to be watched again -- a film built around sound, pace and the moments that mattered most.",
+            price: "Starting from ₹1,20,000",
+            status: "ACTIVE",
+          },
+          {
+            type: "SERVICE",
+            title: "Pre-Wedding Shoot",
+            content: "A relaxed shoot away from the wedding-day schedule, designed to capture the chemistry between the two of you before the big day.",
+            price: "Starting from ₹45,000",
+            status: "ACTIVE",
+          },
+          {
+            type: "SERVICE",
+            title: "Haldi & Makeover Coverage",
+            content: "The colour, ritual and candid joy of Haldi and makeover functions -- every detail preserved as it actually happened.",
+            price: "Starting from ₹35,000",
+            status: "ACTIVE",
+          },
+          {
+            type: "FAQ",
+            title: "How does the process work?",
+            content:
+              "It's a simple 6-step journey: 1) Enquire -- tell us your date and vision, we usually reply within a day. 2) Meet -- a call or in-person meeting to understand your story. 3) Customize -- we build a proposal around exactly what your day needs. 4) Celebrate -- you focus on the day, we stay quietly close. 5) Capture -- every ritual and reaction documented as it happens. 6) Relive -- galleries, films and albums delivered for you to return to for years.",
+            status: "ACTIVE",
+          },
+          {
+            type: "FAQ",
+            title: "How do I get a quote?",
+            content: "Every wedding is different, so we build a personalised quote based on your events, coverage, location and deliverables. Tell us your date and vision through our enquiry form and we'll get back to you, usually within a day.",
+            status: "ACTIVE",
+          },
+        ],
+      },
+    },
+  });
+  await upsertAdmin("owner@uniquecreations.test", "TempPass123!", "OWNER", uniqueCreations.id);
+
   console.log("Seed complete.");
   console.log("Super admin login: superadmin@aiwebsiteassistant.dev / SuperAdmin123!");
-  console.log("Customer A (photography) login: owner@lumierephoto.test / Password123!  clientId=PHOTOGRAPHY_001");
-  console.log("Customer B (hotel) login: owner@seasidegrand.test / Password123!  clientId=HOTEL_002");
+  console.log("Customer A (photography demo) login: owner@lumierephoto.test / Password123!  clientId=PHOTOGRAPHY_001");
+  console.log("Customer B (hotel demo) login: owner@seasidegrand.test / Password123!  clientId=HOTEL_002");
+  console.log("Customer C (real: Unique Creations) login: owner@uniquecreations.test / TempPass123!  clientId=UNIQUE_CREATIONS_001");
 }
 
 main()
