@@ -23,7 +23,6 @@ This starts the backend on `http://localhost:4000`.
 
 - **Register a new website**: http://localhost:4000/register/
 - **Admin portal** (manage knowledge articles + document uploads): http://localhost:4000/admin/
-- **Compare the two matching engines side by side**: http://localhost:4000/compare/
 
 ## How it works end to end
 
@@ -48,17 +47,19 @@ This starts the backend on `http://localhost:4000`.
    4. Knowledge base articles (including ones extracted from uploads)
    5. Nothing matched -- a fixed fallback message + "Call Us"
 
-## Two matching engines, one comparison tool
+## Two matching engines
 
-- `server/src/lib/retrieval/search.ts` -- keyword/TF-IDF style scoring.
+- `server/src/lib/retrieval/search.ts` -- keyword/TF-IDF style scoring,
+  used by `POST /api/chat`.
 - `server/src/lib/embeddings/` + `server/src/lib/retrieval/semanticSearch.ts`
   -- local sentence embeddings (`@huggingface/transformers`, runs fully
-  offline, no API key), matched by cosine similarity.
+  offline, no API key), matched by cosine similarity, used by
+  `POST /api/chat-semantic`.
 
 `server/src/engine/answerEngine.ts` and `answerEngineSemantic.ts` are
 deliberate near-duplicates that differ in exactly one line (which scorer
-they call), so `/compare/` isolates that one variable when testing the
-same question against both.
+they call) -- everything else (booking status, live data, small talk,
+fallback behavior) is identical between the two.
 
 ## Connecting a website's own real backend (optional)
 
@@ -121,8 +122,6 @@ server/
   public/
     register/    self-service sign-up page
     admin/       knowledge + document management portal
-    compare/     side-by-side keyword vs. semantic tester
-    sites/       local demo websites
   data/          runtime JSON "database" (gitignored -- created automatically)
 widget/
   src/widget.ts   the embeddable chat widget (Shadow DOM, no external deps)

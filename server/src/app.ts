@@ -30,16 +30,8 @@ export function createApp() {
     res.sendFile(path.resolve(__dirname, "../../widget/dist/widget.js"));
   });
 
-  // The local demo "websites" used for testing website-content ingestion
-  // and cross-website isolation. In a real deployment, each business's
-  // WEBSITE_URL would point at their own real site instead.
-  app.use("/sites", express.static(path.resolve(__dirname, "../public/sites")));
-
   // The simple admin portal (plain HTML/JS -- see public/admin/).
   app.use("/admin", express.static(path.resolve(__dirname, "../public/admin")));
-
-  // Side-by-side keyword vs. semantic comparison harness (see public/compare/).
-  app.use("/compare", express.static(path.resolve(__dirname, "../public/compare")));
 
   // Self-service "install this on your website" sign-up page.
   app.use("/register", express.static(path.resolve(__dirname, "../public/register")));
@@ -52,10 +44,6 @@ export function createApp() {
   app.use("/api/admin/login", adminAuthRouter);
   app.use("/api/admin/:websiteId/knowledge", adminKnowledgeRouter);
   app.use("/api/admin/:websiteId/documents", adminDocumentsRouter);
-
-  // A single landing page linking to every tool -- registered last so it
-  // never shadows the more specific static routes above.
-  app.use("/", express.static(path.resolve(__dirname, "../public/home")));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
