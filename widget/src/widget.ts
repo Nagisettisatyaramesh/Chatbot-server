@@ -1,18 +1,17 @@
 import { WidgetApi } from "./api";
 import { buildStyles } from "./styles";
-import { getVisitorId, getStoredConversationId, setStoredConversationId } from "./state";
-import { ChatMessage, HandoffConfig, WidgetConfig } from "./types";
+import { WebsiteConfig } from "./types";
 
 // Capture the currently-executing <script> tag synchronously -- this only
 // works before the first `await`, since document.currentScript is null
 // once execution yields.
 const currentScript = document.currentScript as HTMLScriptElement | null;
 
-function readConfigFromScriptTag(): { clientId: string; apiBase: string } | null {
+function readConfigFromScriptTag(): { websiteId: string; apiBase: string; chatEndpoint: string } | null {
   if (!currentScript) return null;
-  const clientId = currentScript.getAttribute("data-client-id");
-  if (!clientId) {
-    console.error("[AI Website Assistant] Missing required data-client-id attribute on the widget script tag.");
+  const websiteId = currentScript.getAttribute("data-website-id");
+  if (!websiteId) {
+    console.error("[Chatbot] Missing required data-website-id attribute on the widget script tag.");
     return null;
   }
   const explicitBase = currentScript.getAttribute("data-api-base");
@@ -24,93 +23,98 @@ function readConfigFromScriptTag(): { clientId: string; apiBase: string } | null
       apiBase = "";
     }
   }
-  return { clientId, apiBase: apiBase ?? "" };
+  // Lets a demo/test page opt into the semantic-search engine instead of
+  // the default keyword engine, without any other change -- same website,
+  // same knowledge base, only the matching algorithm differs.
+  const chatEndpoint = currentScript.getAttribute("data-chat-endpoint") || "/api/chat";
+  return { websiteId, apiBase: apiBase ?? "", chatEndpoint };
 }
 
-function escapeAttr(v: string): string {
-  return v.replace(/"/g, "&quot;");
+function sessionStorageKey(websiteId: string): string {
+  return `aiwa_session_${websiteId}`;
 }
+
+const KEYWORD_COLOR = "#4F46E5";
+const SEMANTIC_COLOR = "#059669";
+const LAUNCHER_GAP = 76; // px -- so two widgets on one page don't sit exactly on top of each other
 
 class ChatWidget {
   private api: WidgetApi;
-  private clientId: string;
-  private visitorId: string;
-  private conversationId: string | null;
-  private config: WidgetConfig | null = null;
-  private messages: ChatMessage[] = [];
-  private leadCaptureActive = false;
+  private config: WebsiteConfig | null = null;
   private sending = false;
+  private sessionToken: string | null = null;
+  private pendingMessageAfterLogin: string | null = null;
 
   private root: ShadowRoot;
   private panelEl!: HTMLDivElement;
   private messagesEl!: HTMLDivElement;
-  private quickRepliesEl!: HTMLDivElement;
-  private handoffPanelEl!: HTMLDivElement;
   private inputEl!: HTMLInputElement;
   private sendBtnEl!: HTMLButtonElement;
-  private launcherEl!: HTMLButtonElement;
 
-  constructor(clientId: string, apiBase: string, host: HTMLElement) {
-    this.clientId = clientId;
-    this.api = new WidgetApi(apiBase, clientId);
-    this.visitorId = getVisitorId();
-    this.conversationId = getStoredConversationId(clientId);
+  private isSemantic: boolean;
+
+  constructor(private websiteId: string, apiBase: string, chatEndpoint: string, host: HTMLElement) {
+    this.isSemantic = chatEndpoint !== "/api/chat";
+    this.api = new WidgetApi(apiBase, websiteId, chatEndpoint);
+    try {
+      this.sessionToken = window.localStorage.getItem(sessionStorageKey(websiteId));
+    } catch {
+      this.sessionToken = null;
+    }
     this.root = host.attachShadow({ mode: "open" });
   }
 
   async init() {
     const config = await this.api.getConfig();
-    if (!config) return; // invalid/disabled clientId -- render nothing
+    if (!config) return; // invalid/unknown websiteId -- render nothing
     this.config = config;
     this.render();
   }
 
   private render() {
     const cfg = this.config!;
+    const color = this.isSemantic ? SEMANTIC_COLOR : KEYWORD_COLOR;
     const style = document.createElement("style");
-    style.textContent = buildStyles(cfg.primaryColor, cfg.buttonColor);
+    style.textContent = buildStyles(color, color);
     this.root.appendChild(style);
 
     const launcher = document.createElement("button");
     launcher.className = "aiwa-launcher";
     launcher.setAttribute("aria-label", "Open chat");
     launcher.innerHTML = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 1 1 3.06 6.3L4 20l1.1-3.3A7.96 7.96 0 0 1 4 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    this.launcherEl = launcher;
+    if (this.isSemantic) {
+      // Shift left so this widget doesn't sit exactly on top of a
+      // keyword-engine widget also embedded on the same comparison page.
+      launcher.style.right = `${20 + LAUNCHER_GAP}px`;
+    }
     this.root.appendChild(launcher);
 
     const panel = document.createElement("div");
     panel.className = "aiwa-panel";
     panel.innerHTML = `
       <div class="aiwa-header">
-        <div class="aiwa-avatar">${
-          cfg.avatarUrl ? `<img src="${escapeAttr(cfg.avatarUrl)}" alt="" />` : "🤖"
-        }</div>
-        <div class="aiwa-header-text">
-          <div class="aiwa-header-title"></div>
-          <div class="aiwa-header-subtitle"></div>
-        </div>
+        <div class="aiwa-avatar">🤖</div>
+        <div class="aiwa-header-title"></div>
         <button class="aiwa-close" aria-label="Close chat">&times;</button>
       </div>
       <div class="aiwa-messages"></div>
-      <div class="aiwa-quick-replies"></div>
-      <div class="aiwa-handoff-panel" style="display:none"></div>
       <div class="aiwa-input-row">
-        <input class="aiwa-input" type="text" placeholder="Type your message..." maxlength="2000" />
+        <input class="aiwa-input" type="text" placeholder="Type your question..." maxlength="2000" />
         <button class="aiwa-send" aria-label="Send">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l16-8L4 4v6l10 2-10 2v6Z" fill="currentColor"/></svg>
         </button>
       </div>
-      <div class="aiwa-footer-link">Powered by AI Website Assistant</div>
     `;
+    if (this.isSemantic) {
+      panel.style.right = `${20 + LAUNCHER_GAP}px`;
+    }
     this.root.appendChild(panel);
     this.panelEl = panel;
 
-    panel.querySelector<HTMLDivElement>(".aiwa-header-title")!.textContent = cfg.botName;
-    panel.querySelector<HTMLDivElement>(".aiwa-header-subtitle")!.textContent = cfg.businessName;
+    const engineLabel = this.isSemantic ? " (Semantic)" : " (Keyword)";
+    panel.querySelector<HTMLDivElement>(".aiwa-header-title")!.textContent = `🤖 ${cfg.businessName} Assistant${engineLabel}`;
 
     this.messagesEl = panel.querySelector(".aiwa-messages")!;
-    this.quickRepliesEl = panel.querySelector(".aiwa-quick-replies")!;
-    this.handoffPanelEl = panel.querySelector(".aiwa-handoff-panel")!;
     this.inputEl = panel.querySelector(".aiwa-input")!;
     this.sendBtnEl = panel.querySelector(".aiwa-send")!;
 
@@ -121,14 +125,7 @@ class ChatWidget {
       if (e.key === "Enter") this.handleSend();
     });
 
-    this.addBotMessage(cfg.welcomeMessage);
-    this.renderQuickReplies(cfg.quickReplies);
-    // Avoid rendering a second, visually-duplicate "Talk to Human" button if
-    // the business already configured one as a quick reply themselves.
-    const alreadyHasHandoffQuickReply = cfg.quickReplies.some(
-      (r) => r.trim().toLowerCase().replace(/[^a-z\s]/g, "").trim() === "talk to human"
-    );
-    if (!alreadyHasHandoffQuickReply) this.renderPersistentHandoffAccess();
+    this.addBotMessage("Hi! How can I help you?");
   }
 
   private toggle() {
@@ -140,22 +137,29 @@ class ChatWidget {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
-  private addMessageBubble(role: "user" | "assistant", content: string) {
+  private addMessageBubble(role: "user" | "assistant", content: string, isError = false) {
     const bubble = document.createElement("div");
-    bubble.className = role === "user" ? "aiwa-msg aiwa-msg-user" : "aiwa-msg aiwa-msg-bot";
+    bubble.className = role === "user" ? "aiwa-msg aiwa-msg-user" : isError ? "aiwa-msg aiwa-msg-error" : "aiwa-msg aiwa-msg-bot";
     bubble.textContent = content; // textContent only -- never render model/user text as HTML
     this.messagesEl.appendChild(bubble);
     this.scrollToBottom();
   }
 
-  private addBotMessage(content: string) {
-    this.messages.push({ role: "assistant", content });
-    this.addMessageBubble("assistant", content);
+  private addBotMessage(content: string, isError = false) {
+    this.addMessageBubble("assistant", content, isError);
   }
 
   private addUserMessage(content: string) {
-    this.messages.push({ role: "user", content });
     this.addMessageBubble("user", content);
+  }
+
+  private addCallButton(phone: string) {
+    const a = document.createElement("a");
+    a.className = "aiwa-call-btn";
+    a.href = `tel:${phone.replace(/\s+/g, "")}`;
+    a.textContent = "📞 Call Us";
+    this.messagesEl.appendChild(a);
+    this.scrollToBottom();
   }
 
   private showTyping(): () => void {
@@ -167,148 +171,85 @@ class ChatWidget {
     return () => typing.remove();
   }
 
-  private renderQuickReplies(replies: string[]) {
-    this.quickRepliesEl.innerHTML = "";
-    for (const reply of replies.slice(0, 4)) {
-      const btn = document.createElement("button");
-      btn.className = "aiwa-quick-reply";
-      btn.textContent = reply;
-      // A business owner configuring their own quick replies (Chatbot
-      // Settings -> Quick Reply Suggestions) could easily type something
-      // like "Talk to Human" themselves, not realizing the widget already
-      // appends its own working one via renderPersistentHandoffAccess().
-      // Without this check that creates two visually-similar buttons where
-      // only one actually opens the handoff panel -- the other just sends
-      // "Talk to Human" as a literal chat message. Treat any quick reply
-      // that reads that way (regardless of emoji/casing) as the real thing.
-      if (reply.trim().toLowerCase().replace(/[^a-z\s]/g, "").trim() === "talk to human") {
-        btn.addEventListener("click", () => this.openHandoffPanel(this.config!.handoff));
-      } else {
-        btn.addEventListener("click", () => this.sendText(reply));
-      }
-      this.quickRepliesEl.appendChild(btn);
-    }
-  }
-
-  private addTalkToHumanButton(handoff: HandoffConfig) {
-    const btn = document.createElement("button");
-    btn.className = "aiwa-handoff-btn";
-    btn.textContent = "💬 Talk to Human";
-    btn.addEventListener("click", () => this.openHandoffPanel(handoff));
-    this.messagesEl.appendChild(btn);
+  private showLoginForm(afterMessage: string) {
+    this.pendingMessageAfterLogin = afterMessage;
+    const form = document.createElement("div");
+    form.className = "aiwa-login-form";
+    form.innerHTML = `
+      <input class="aiwa-login-username" type="text" placeholder="Username" />
+      <input class="aiwa-login-password" type="password" placeholder="Password" />
+      <div class="aiwa-login-error" style="display:none"></div>
+      <div class="aiwa-login-form-row">
+        <button class="aiwa-login-submit">Log In</button>
+        <button class="aiwa-login-cancel">Cancel</button>
+      </div>
+    `;
+    this.messagesEl.appendChild(form);
     this.scrollToBottom();
-  }
 
-  private renderPersistentHandoffAccess() {
-    // A small always-visible way to reach a human even before any fallback happens.
-    const link = document.createElement("button");
-    link.className = "aiwa-quick-reply";
-    link.textContent = "💬 Talk to Human";
-    link.addEventListener("click", () => this.openHandoffPanel(this.config!.handoff));
-    this.quickRepliesEl.appendChild(link);
-  }
+    const usernameEl = form.querySelector<HTMLInputElement>(".aiwa-login-username")!;
+    const passwordEl = form.querySelector<HTMLInputElement>(".aiwa-login-password")!;
+    const errorEl = form.querySelector<HTMLDivElement>(".aiwa-login-error")!;
 
-  private openHandoffPanel(handoff: HandoffConfig) {
-    const panel = this.handoffPanelEl;
-    panel.innerHTML = `<div class="aiwa-handoff-panel-title">How would you like to contact us?</div>`;
-    panel.style.display = "flex";
+    form.querySelector(".aiwa-login-cancel")!.addEventListener("click", () => {
+      this.pendingMessageAfterLogin = null;
+      form.remove();
+    });
 
-    if (handoff.whatsapp) {
-      const cleaned = handoff.whatsapp.replace(/[^\d+]/g, "").replace(/^\+/, "");
-      const a = document.createElement("a");
-      a.className = "aiwa-handoff-option";
-      a.href = `https://wa.me/${cleaned}`;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = "💬 WhatsApp";
-      panel.appendChild(a);
-    }
-    if (handoff.phone) {
-      const a = document.createElement("a");
-      a.className = "aiwa-handoff-option";
-      a.href = `tel:${handoff.phone.replace(/\s+/g, "")}`;
-      a.textContent = "📞 Call Us";
-      panel.appendChild(a);
-    }
-    if (this.config?.leadCaptureEnabled) {
-      const btn = document.createElement("button");
-      btn.className = "aiwa-handoff-option";
-      btn.textContent = "📝 Submit Enquiry";
-      btn.addEventListener("click", () => this.startEnquiry());
-      panel.appendChild(btn);
-    }
-    if (handoff.enquiryUrl) {
-      const a = document.createElement("a");
-      a.className = "aiwa-handoff-option";
-      a.href = handoff.enquiryUrl;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = "🔗 Open Enquiry Form";
-      panel.appendChild(a);
-    }
-    if (!handoff.whatsapp && !handoff.phone && !handoff.enquiryUrl && !this.config?.leadCaptureEnabled) {
-      const p = document.createElement("div");
-      p.textContent = handoff.email ? `Please email us at ${handoff.email}` : "Please contact the business directly.";
-      panel.appendChild(p);
-    }
-  }
+    const submit = async () => {
+      errorEl.style.display = "none";
+      try {
+        const result = await this.api.login(usernameEl.value.trim(), passwordEl.value);
+        this.sessionToken = result.sessionToken;
+        try {
+          window.localStorage.setItem(sessionStorageKey(this.websiteId), result.sessionToken);
+        } catch {
+          // storage unavailable -- session still works for this page view
+        }
+        form.remove();
+        this.addBotMessage(`Logged in as ${result.name}.`);
+        const pending = this.pendingMessageAfterLogin;
+        this.pendingMessageAfterLogin = null;
+        if (pending) await this.sendText(pending, false);
+      } catch (err) {
+        errorEl.textContent = err instanceof Error ? err.message : "Login failed";
+        errorEl.style.display = "block";
+      }
+    };
 
-  private closeHandoffPanel() {
-    this.handoffPanelEl.style.display = "none";
-    this.handoffPanelEl.innerHTML = "";
-  }
-
-  private async startEnquiry() {
-    this.closeHandoffPanel();
-    this.leadCaptureActive = true;
-    const stopTyping = this.showTyping();
-    try {
-      const result = await this.api.startLead(this.visitorId, this.conversationId);
-      this.conversationId = result.conversationId;
-      setStoredConversationId(this.clientId, this.conversationId);
-      stopTyping();
-      this.addBotMessage(result.message);
-    } catch (err) {
-      stopTyping();
-      this.addBotMessage(err instanceof Error ? err.message : "Something went wrong.");
-      this.leadCaptureActive = false;
-    }
+    form.querySelector(".aiwa-login-submit")!.addEventListener("click", submit);
+    passwordEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submit();
+    });
   }
 
   private async handleSend() {
     const text = this.inputEl.value.trim();
     if (!text || this.sending) return;
     this.inputEl.value = "";
-    this.sendText(text);
+    await this.sendText(text, true);
   }
 
-  private async sendText(text: string) {
+  private async sendText(text: string, showUserBubble: boolean) {
     if (this.sending) return;
     this.sending = true;
     this.sendBtnEl.disabled = true;
-    this.closeHandoffPanel();
-    this.addUserMessage(text);
+    if (showUserBubble) this.addUserMessage(text);
 
     const stopTyping = this.showTyping();
     try {
-      if (this.leadCaptureActive) {
-        if (!this.conversationId) throw new Error("Enquiry session expired, please try again.");
-        const result = await this.api.replyLead(this.conversationId, text);
-        stopTyping();
-        this.addBotMessage(result.message);
-        if (result.done) this.leadCaptureActive = false;
-      } else {
-        const result = await this.api.sendMessage(this.visitorId, text, this.conversationId);
-        this.conversationId = result.conversationId;
-        setStoredConversationId(this.clientId, this.conversationId);
-        stopTyping();
-        this.addBotMessage(result.message);
-        if (result.quickReplies.length > 0) this.renderQuickReplies([...result.quickReplies, "Talk to Human"]);
-        if (result.humanHandoff && result.handoff) this.addTalkToHumanButton(result.handoff);
-      }
+      const result = await this.api.sendMessage(text, this.sessionToken);
+      stopTyping();
+      this.addBotMessage(result.answer);
+      if (result.requiresLogin) this.showLoginForm(text);
+      if (result.humanFallback && result.callPhone) this.addCallButton(result.callPhone);
     } catch (err) {
       stopTyping();
-      this.addBotMessage(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      this.addBotMessage(
+        err instanceof Error ? err.message : "I'm unable to provide that information right now. Would you like to speak with our team?",
+        true
+      );
+      if (this.config?.humanPhone) this.addCallButton(this.config.humanPhone);
     } finally {
       this.sending = false;
       this.sendBtnEl.disabled = false;
@@ -320,14 +261,17 @@ function boot() {
   const parsed = readConfigFromScriptTag();
   if (!parsed || !parsed.apiBase) return;
 
-  const hostId = `aiwa-host-${parsed.clientId}`;
+  // Includes the endpoint in the host id so a demo/comparison page can
+  // embed both the keyword and semantic widgets for the same websiteId at
+  // once without one blocking the other's init.
+  const hostId = `aiwa-host-${parsed.websiteId}-${parsed.chatEndpoint.replace(/[^a-z0-9]/gi, "_")}`;
   if (document.getElementById(hostId)) return; // avoid double-init if script included twice
 
   const host = document.createElement("div");
   host.id = hostId;
   document.body.appendChild(host);
 
-  const widget = new ChatWidget(parsed.clientId, parsed.apiBase, host);
+  const widget = new ChatWidget(parsed.websiteId, parsed.apiBase, parsed.chatEndpoint, host);
   widget.init();
 }
 

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Install Your Chatbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Dark ink is now a deliberate ACCENT surface (button, code, active
+       tab) rather than the page environment -- see the button/pre/tabs
+       rules below, which intentionally keep using it unchanged. */
+    --ink: #14110f;
+    --ink-soft: #292420;
+    --page-bg: #efe6d4;
+    --page-bg-2: #e6dabf;
+    --dim-num: #cbbe9e;
+    --paper: #fffef9;
+    --paper-dim: #efe8d8;
+    --paper-line: #ded2b4;
+    --brass: #a8672d;
+    --brass-deep: #7a4a1e;
+    --brass-tint: #a8672d1f;
+    --moss: #3f5a4b;
+    --moss-tint: #3f5a4b1a;
+    --red: #a4432c;
+    --text-on-ink: #f2ede1;
+    --text-on-ink-dim: #b7ada0;
+    --text-on-paper: #241f17;
+    --text-on-paper-dim: #6e6455;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Manrope", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 10% -10%, var(--page-bg-2) 0%, transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, var(--page-bg-2) 0%, transparent 55%);
+    color: var(--text-on-paper);
+    font-family: var(--body);
+    min-height: 100vh;
+  }
+
+  a { color: var(--brass); }
+
+  .wrap { max-width: 620px; margin: 0 auto; padding: 56px 24px 90px; }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin-bottom: 18px;
+  }
+  .eyebrow::before { content: "●"; font-size: 8px; color: var(--moss); }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(32px, 5vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    color: var(--text-on-paper);
+  }
+  h1 em { font-style: italic; color: var(--brass); font-weight: 500; }
+
+  .lede {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-on-paper-dim);
+    max-width: 46ch;
+    margin: 0 0 40px;
+  }
+
+  /* -- step rail -------------------------------------------------- */
+  .rail {
+    display: flex;
+    gap: 28px;
+    margin-bottom: 36px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--paper-line);
+  }
+  .rail-step {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-on-paper-dim);
+    transition: color 0.3s ease;
+  }
+  .rail-step .n {
+    font-family: var(--display);
+    font-style: italic;
+    font-size: 17px;
+    color: var(--dim-num);
+    transition: color 0.3s ease;
+  }
+  .rail-step.is-active { color: var(--text-on-paper); }
+  .rail-step.is-active .n { color: var(--brass); }
+  body:has(#resultCard.show) .rail-step[data-rail="1"] { color: var(--text-on-paper-dim); }
+  body:has(#resultCard.show) .rail-step[data-rail="1"] .n { color: var(--moss); }
+  body:has(#resultCard.show) .rail-step[data-rail="2"],
+  body:has(#resultCard.show) .rail-step[data-rail="3"] { color: var(--text-on-paper); }
+  body:has(#resultCard.show) .rail-step[data-rail="2"] .n,
+  body:has(#resultCard.show) .rail-step[data-rail="3"] .n { color: var(--brass); }
+
+  /* -- form card ---------------------------------------------------- */
+  .card {
+    background: var(--paper);
+    color: var(--text-on-paper);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: 0 20px 45px -22px rgba(74,52,20,0.35);
+  }
+
+  #formCard {
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  #formCard.hide {
+    display: none;
+  }
+
+  .group + .group { margin-top: 30px; }
+  .group-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-on-paper-dim);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--paper-line);
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-on-paper);
+  }
+  input {
+    width: 100%;
+    padding: 10px 13px;
+    border: 1.5px solid var(--paper-line);
+    border-radius: 9px;
+    background: #fff;
+    font-family: var(--body);
+    font-size: 14px;
+    color: var(--text-on-paper);
+    margin-bottom: 16px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input::placeholder { color: #b3a892; }
+  input:focus {
+    outline: none;
+    border-color: var(--brass);
+    box-shadow: 0 0 0 3px var(--brass-tint);
+  }
+
+  .hint { font-size: 12px; color: var(--text-on-paper-dim); margin: -10px 0 16px; }
+
+  button { font-family: var(--body); cursor: pointer; }
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--text-on-ink);
+    border: none;
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 14.5px;
+    font-weight: 700;
+    width: 100%;
+    margin-top: 6px;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--ink-soft); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.55; cursor: default; }
+  .btn-primary:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  .error {
+    color: var(--red);
+    background: #a4432c14;
+    border: 1px solid #a4432c33;
+    border-radius: 8px;
+    padding: 10px 13px;
+    font-size: 13px;
+    margin: 18px 0 0;
+  }
+  .error[style*="display: none"] { display: none; }
+
+  /* -- result: the "ticket" ------------------------------------------ */
+  .result { display: none; }
+  .result.show { display: block; animation: rise 0.5s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  .ticket {
+    background: var(--paper);
+    color: var(--text-on-paper);
+    border-radius: 4px 4px var(--radius) var(--radius);
+    position: relative;
+    padding-top: 30px;
+    box-shadow: 0 20px 45px -22px rgba(74,52,20,0.35);
+  }
+  .ticket::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: 0; right: 0; height: 17px;
+    background: radial-gradient(circle at 10px 9px, var(--page-bg) 0, var(--page-bg) 6px, transparent 6.5px) repeat-x;
+    background-size: 22px 18px;
+    background-position: 11px 0;
+  }
+
+  .ticket-body { padding: 8px 32px 32px; }
+
+  .ticket-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .ticket-check {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--moss); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .ticket-title { font-family: var(--display); font-size: 20px; font-weight: 500; }
+
+  .ticket-sub { font-size: 13px; color: var(--text-on-paper-dim); margin: 4px 0 24px 32px; }
+  .ticket-sub strong { color: var(--text-on-paper); font-family: var(--mono); font-weight: 500; }
+
+  .divider {
+    border: none;
+    border-top: 1px dashed var(--paper-line);
+    margin: 22px 0;
+  }
+
+  .field-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-on-paper-dim);
+    margin-bottom: 8px;
+  }
+
+  pre {
+    background: var(--ink);
+    color: var(--text-on-ink);
+    border-radius: 10px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+    position: relative;
+    margin: 0;
+  }
+  pre code { white-space: pre; }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--brass-tint); color: var(--brass);
+    border: 1px solid var(--brass-deep);
+    border-radius: 6px;
+    padding: 5px 11px;
+    font-family: var(--body);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .copy-btn:hover { background: var(--brass); color: var(--ink); }
+
+  .info-row { font-size: 13.5px; color: var(--text-on-paper-dim); margin-top: 16px; }
+  .info-row a { color: var(--brass-deep); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--brass-deep); }
+
+  /* -- install instructions ------------------------------------------ */
+  .install-section { margin-top: 8px; }
+  .install-section h3 {
+    font-family: var(--display); font-weight: 500; font-size: 16px;
+    margin: 0 0 14px;
+  }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .tabs button {
+    background: transparent; color: var(--text-on-paper-dim);
+    border: 1px solid var(--paper-line);
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-size: 12px; font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .tabs button:hover { border-color: var(--brass-deep); color: var(--text-on-paper); }
+  .tabs button.active { background: var(--ink); color: var(--text-on-ink); border-color: var(--ink); }
+
+  .tab-panel { display: none; font-size: 13.5px; line-height: 1.65; color: var(--text-on-paper); }
+  .tab-panel.active { display: block; animation: fade 0.2s ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .tab-panel code:not(pre code) { background: var(--paper-dim); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: 0.92em; }
+  .tab-panel pre { margin-top: 12px; }
+
+  footer.note {
+    max-width: 620px; margin: 30px auto 0; padding: 0 24px;
+    font-size: 12px; color: var(--text-on-paper-dim); text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    .wrap { padding: 40px 18px 70px; }
+    .card, .ticket-body { padding: 24px; }
+    .ticket-body { padding-left: 22px; padding-right: 22px; }
+    .rail { gap: 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">AI Website Assistant &middot; Install</div>
+  <h1>Give your website<br /><em>something to say.</em></h1>
+  <p class="lede">Tell us about your business below. We'll read your own site and answer visitor questions from it &mdash; accurately, in one line of code.</p>
+
+  <div class="rail">
+    <div class="rail-step is-active" data-rail="1"><span class="n">01</span> Tell us about your business</div>
+    <div class="rail-step" data-rail="2"><span class="n">02</span> Get your snippet</div>
+    <div class="rail-step" data-rail="3"><span class="n">03</span> Paste it in</div>
+  </div>
+
+  <div class="card" id="formCard">
+    <form id="registerForm">
+      <div class="group">
+        <div class="group-label">Your business</div>
+        <label>Business Name</label>
+        <input id="businessName" required placeholder="e.g. Sunrise Bakery" />
+        <label>Website URL</label>
+        <input id="websiteUrl" required type="url" placeholder="https://yourbusiness.com" />
+        <div class="hint">We'll read this page's content so the chatbot can answer from it.</div>
+        <label>Category</label>
+        <input id="category" placeholder="e.g. Bakery, Hotel, Salon" />
+      </div>
+
+      <div class="group">
+        <div class="group-label">Contact &mdash; for the "Talk to Human" button</div>
+        <label>Phone Number</label>
+        <input id="humanPhone" required placeholder="+91XXXXXXXXXX" />
+        <label>Email</label>
+        <input id="email" type="email" placeholder="hello@yourbusiness.com" />
+        <label>Address</label>
+        <input id="address" placeholder="123 Main Street, City" />
+        <label>Business Hours</label>
+        <input id="hours" placeholder="e.g. Mon-Sat 9am-6pm" />
+      </div>
+
+      <div class="group">
+        <div class="group-label">Your admin login &mdash; to manage articles later</div>
+        <label>Admin Username</label>
+        <input id="adminUsername" required minlength="3" placeholder="e.g. owner" />
+        <label>Admin Password</label>
+        <input id="adminPassword" required type="password" minlength="6" placeholder="At least 6 characters" />
+      </div>
+
+      <div class="error" id="formError" style="display:none"></div>
+      <button type="submit" class="btn-primary" id="submitBtn">Create my chatbot</button>
+    </form>
+  </div>
+
+  <div class="result" id="resultCard">
+    <div class="ticket">
+      <div class="ticket-body">
+        <div class="ticket-head">
+          <div class="ticket-check">&#10003;</div>
+          <div class="ticket-title">Ready to install</div>
+        </div>
+        <div class="ticket-sub">Website ID <strong id="websiteIdOut"></strong></div>
+
+        <div class="field-label">Your snippet</div>
+        <pre><button class="copy-btn" id="copyBtn">Copy</button><code id="snippetOut"></code></pre>
+        <div class="info-row">Manage knowledge articles any time at <a id="adminLinkOut" target="_blank"></a>.</div>
+
+        <hr class="divider" />
+
+        <div class="install-section">
+          <h3>Where do I paste this?</h3>
+          <div class="tabs" id="installTabs">
+            <button data-tab="html" class="active">Plain HTML</button>
+            <button data-tab="wordpress">WordPress</button>
+            <button data-tab="shopify">Shopify</button>
+            <button data-tab="wix">Wix / Squarespace</button>
+            <button data-tab="react">React</button>
+            <button data-tab="nextjs">Next.js</button>
+          </div>
+
+          <div class="tab-panel active" data-panel="html">
+            Open each <code>.html</code> file on your site and paste the snippet right before the closing <code>&lt;/body&gt;</code> tag, near the bottom of the file.
+          </div>
+
+          <div class="tab-panel" data-panel="wordpress">
+            Go to <strong>Appearance &rarr; Theme File Editor &rarr; footer.php</strong> and paste the snippet just before <code>&lt;/body&gt;</code>.
+            Simpler alternative: install a free "Insert Headers and Footers" plugin and paste it into the footer box &mdash; avoids editing theme files directly.
+          </div>
+
+          <div class="tab-panel" data-panel="shopify">
+            Go to <strong>Online Store &rarr; Themes &rarr; Edit Code &rarr; theme.liquid</strong> and paste the snippet just before <code>&lt;/body&gt;</code>.
+          </div>
+
+          <div class="tab-panel" data-panel="wix">
+            In your site settings, look for <strong>"Custom Code"</strong>, <strong>"Embed"</strong>, or <strong>"Tracking &amp; Analytics"</strong>,
+            then paste it into whichever section says it loads on every page (often called "Footer Code" or "Body &mdash; End").
+          </div>
+
+          <div class="tab-panel" data-panel="react">
+            Add this in your root component instead of the raw script tag:
+            <pre><code id="reactSnippet"></code></pre>
+          </div>
+
+          <div class="tab-panel" data-panel="nextjs">
+            Use Next.js's <code>Script</code> component instead of a raw script tag:
+            <pre><code id="nextjsSnippet"></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="note">Every business gets its own isolated knowledge base &mdash; nothing is ever shared between installs.</footer>
+
+<script src="register.js"></script>
+</body>
+</html>

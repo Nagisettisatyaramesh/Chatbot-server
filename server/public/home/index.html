@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chatbot Tool -- Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #14110f;
+    --ink-soft: #292420;
+    --page-bg: #efe6d4;
+    --page-bg-2: #e6dabf;
+    --paper: #fffef9;
+    --paper-line: #ded2b4;
+    --brass: #a8672d;
+    --brass-deep: #7a4a1e;
+    --brass-tint: #a8672d1f;
+    --moss: #3f5a4b;
+    --moss-tint: #3f5a4b1a;
+    --text: #241f17;
+    --text-dim: #6e6455;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Manrope", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 10% -10%, var(--page-bg-2) 0%, transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, var(--page-bg-2) 0%, transparent 55%);
+    color: var(--text);
+    font-family: var(--body);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 56px 24px 90px; }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brass); margin-bottom: 18px;
+  }
+  .eyebrow::before { content: "●"; font-size: 8px; color: var(--moss); }
+
+  h1 {
+    font-family: var(--display); font-weight: 500;
+    font-size: clamp(30px, 5vw, 42px); line-height: 1.1; letter-spacing: -0.01em;
+    margin: 0 0 12px;
+  }
+  h1 em { font-style: italic; color: var(--brass); font-weight: 500; }
+  .lede { font-size: 15.5px; line-height: 1.6; color: var(--text-dim); max-width: 60ch; margin: 0 0 44px; }
+
+  .group { margin-bottom: 40px; }
+  .group-title {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px dashed var(--paper-line);
+  }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+
+  .tool-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--paper);
+    border: 1px solid var(--paper-line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 14px 30px -18px rgba(74,52,20,0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .tool-card:hover { transform: translateY(-2px); box-shadow: 0 18px 36px -16px rgba(74,52,20,0.35); }
+  .tool-card .title { font-family: var(--display); font-size: 17px; font-weight: 500; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .tool-card .desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
+  .tool-card .meta { font-family: var(--mono); font-size: 11px; color: var(--brass-deep); background: var(--brass-tint); display: inline-block; padding: 3px 8px; border-radius: 999px; }
+  .tool-card .meta.moss { color: var(--moss); background: var(--moss-tint); }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--moss); flex-shrink: 0; }
+  .dot.brass { background: var(--brass); }
+
+  .creds {
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    background: #00000006; border-radius: 8px; padding: 8px 11px; margin-top: 10px;
+  }
+  .creds b { color: var(--text); }
+
+  footer { margin-top: 20px; font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">AI Website Assistant &middot; Overview</div>
+  <h1>Everything in <em>one place.</em></h1>
+  <p class="lede">All tools run from this one local server. Pick a link below &mdash; each one explains what it demonstrates and, where relevant, the login to use.</p>
+
+  <div class="group">
+    <div class="group-title">Install a chatbot on a website</div>
+    <div class="cards">
+      <a class="tool-card" href="/register/">
+        <div class="title"><span class="dot brass"></span>Register</div>
+        <div class="desc">Self-service sign-up: any business enters its name, website, and contact info and immediately gets a working, isolated chatbot plus an install snippet.</div>
+        <span class="meta">Public &middot; no login</span>
+      </a>
+      <a class="tool-card" href="/admin/">
+        <div class="title"><span class="dot brass"></span>Admin Portal</div>
+        <div class="desc">Where a business manages its own knowledge articles (add / edit / delete) &mdash; changes are live in the chatbot instantly.</div>
+        <div class="creds">hotel-001 &middot; <b>admin</b> / admin123</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Live demo sites (chatbot embedded)</div>
+    <div class="cards">
+      <a class="tool-card" href="/sites/hotel-001/">
+        <div class="title"><span class="dot"></span>Demo Hotel</div>
+        <div class="desc">Two chat bubbles side by side on one real page: indigo runs the keyword engine, green runs semantic search. Same knowledge base, same questions.</div>
+        <span class="meta moss">Keyword + Semantic</span>
+      </a>
+      <a class="tool-card" href="/sites/photo-002/">
+        <div class="title"><span class="dot"></span>Demo Photography</div>
+        <div class="desc">A second, fully isolated business &mdash; proves the same widget code never mixes information between different installs.</div>
+        <span class="meta">Keyword engine</span>
+      </a>
+      <a class="tool-card" href="/sites/generic-bakery-test/">
+        <div class="title"><span class="dot"></span>Sun Bakery</div>
+        <div class="desc">Registered through the real sign-up form, on an ordinary web page with no special markup &mdash; proves the tool works on a genuinely arbitrary site, not just our own demo HTML.</div>
+        <span class="meta moss">Semantic engine</span>
+      </a>
+      <a class="tool-card" href="/compare/">
+        <div class="title"><span class="dot brass"></span>Compare</div>
+        <div class="desc">Ask any question once, see both engines answer side by side with sources and response time &mdash; fastest way to evaluate keyword vs. semantic.</div>
+        <span class="meta">Evaluation tool</span>
+      </a>
+    </div>
+  </div>
+
+  <footer>Every install is fully isolated &mdash; its own knowledge base, its own website content, its own database. Nothing is ever shared between businesses.</footer>
+</div>
+</body>
+</html>

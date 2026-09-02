@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Knowledge Admin</title>
+<style>
+  :root { --primary: #4F46E5; --bg: #f7f8fa; --border: #e3e5e9; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: var(--bg); color: #1a1a1a; }
+  header { background: #fff; border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 18px; margin: 0; }
+  main { max-width: 800px; margin: 32px auto; padding: 0 20px 60px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #444; }
+  input, textarea, select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; margin-bottom: 12px; }
+  textarea { min-height: 90px; resize: vertical; }
+  button { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { opacity: 0.92; }
+  button.secondary { background: #fff; color: #444; border: 1px solid var(--border); }
+  button.danger { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; }
+  .item-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+  .item-row:last-child { border-bottom: none; }
+  .item-title { font-weight: 600; margin-bottom: 4px; }
+  .item-content { color: #555; font-size: 13px; white-space: pre-wrap; }
+  .item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .item-actions button { padding: 6px 10px; font-size: 12px; }
+  .error { color: #b91c1c; font-size: 13px; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+  .muted { color: #888; font-size: 13px; }
+  .success { color: #15803d; font-size: 13px; }
+  #logoutBtn { background: #fff; color: #444; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<div id="loginView" class="card" style="max-width:360px;margin:80px auto;">
+  <h2 style="margin-top:0;">Knowledge Admin Login</h2>
+  <label>Website ID</label>
+  <input id="loginWebsiteId" list="websiteIdSuggestions" placeholder="e.g. sunrise-bakery (shown when you registered)" />
+  <datalist id="websiteIdSuggestions">
+    <option value="hotel-001">hotel-001 (Demo Hotel)</option>
+    <option value="photo-002">photo-002 (Demo Photography)</option>
+  </datalist>
+  <label>Username</label>
+  <input id="loginUsername" placeholder="admin" />
+  <label>Password</label>
+  <input id="loginPassword" type="password" placeholder="********" />
+  <div class="muted" style="margin-bottom:12px;">Demo login: hotel-001 / admin / admin123</div>
+  <div id="loginError" class="error hidden"></div>
+  <button id="loginBtn" style="width:100%">Log In</button>
+</div>
+
+<div id="appView" class="hidden">
+  <header>
+    <h1 id="pageTitle">Knowledge Admin</h1>
+    <button id="logoutBtn">Log out</button>
+  </header>
+  <main>
+    <div class="card">
+      <h3 id="formTitle" style="margin-top:0;">Add Knowledge Article</h3>
+      <label>Title / Question</label>
+      <input id="itemTitle" placeholder="e.g. What time is check-in?" />
+      <label>Content / Answer</label>
+      <textarea id="itemContent" placeholder="e.g. Check-in time is 12 PM."></textarea>
+      <div id="formError" class="error hidden"></div>
+      <button id="saveBtn">Add Article</button>
+      <button id="cancelEditBtn" class="secondary hidden">Cancel</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Articles (<span id="itemCount">0</span>)</h3>
+      <div id="itemList"></div>
+      <p id="emptyState" class="muted hidden">No knowledge articles yet. Add one above.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Upload a Document</h3>
+      <p class="muted" style="margin-top:-6px;">PDF, DOC, DOCX, or TXT (max 10MB). Its text becomes searchable knowledge automatically -- use this when your website's own content isn't readable by the chatbot (e.g. a single-page app), or you don't have a website content section covering something yet.</p>
+      <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt" style="margin-top:10px;" />
+      <div id="uploadError" class="error hidden" style="margin-top:10px;"></div>
+      <div id="uploadStatus" class="muted hidden" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Documents (<span id="docCount">0</span>)</h3>
+      <div id="docList"></div>
+      <p id="docEmptyState" class="muted hidden">No documents uploaded yet.</p>
+    </div>
+  </main>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

@@ -2,20 +2,14 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import path from "path";
-import { env } from "./config/env";
-import { authRouter } from "./routes/auth.routes";
-import { customerRouter } from "./routes/customer.routes";
-import { settingsRouter } from "./routes/settings.routes";
-import { knowledgeRouter } from "./routes/knowledge.routes";
-import { documentsRouter } from "./routes/documents.routes";
-import { websiteImportRouter } from "./routes/websiteImport.routes";
 import { chatRouter } from "./routes/chat.routes";
-import { widgetConfigRouter } from "./routes/widgetConfig.routes";
-import { conversationsRouter } from "./routes/conversations.routes";
-import { leadsRouter } from "./routes/leads.routes";
-import { analyticsRouter } from "./routes/analytics.routes";
-import { superAdminRouter } from "./routes/superadmin.routes";
-import { adminApiRateLimiter } from "./middleware/rateLimit";
+import { chatSemanticRouter } from "./routes/chatSemantic.routes";
+import { websiteConfigRouter } from "./routes/websiteConfig.routes";
+import { customerAuthRouter } from "./routes/customerAuth.routes";
+import { adminAuthRouter } from "./routes/adminAuth.routes";
+import { adminKnowledgeRouter } from "./routes/adminKnowledge.routes";
+import { adminDocumentsRouter } from "./routes/adminDocuments.routes";
+import { registerRouter } from "./routes/register.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export function createApp() {
@@ -23,18 +17,12 @@ export function createApp() {
 
   app.disable("x-powered-by");
   app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "256kb" }));
 
-  // The widget itself and the public chat/config endpoints must be
-  // reachable from ANY origin, since it is embedded on arbitrary third
-  // party websites. Tenant isolation there is enforced by clientId
-  // lookup, not by CORS -- see chat.routes.ts / widgetConfig.routes.ts.
-  app.use("/widget.js", cors());
-  app.use("/api/chat", cors());
-  app.use("/api/widget", cors());
-
-  // The admin/super-admin API is restricted to the configured dashboard origin(s).
-  const adminCors = cors({ origin: env.adminCorsOrigin, credentials: true });
+  // Open CORS everywhere: the widget is meant to be embedded on arbitrary
+  // third-party sites, and isolation is enforced by websiteId lookup in
+  // the chat engine, not by which origin is calling.
+  app.use(cors());
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -42,25 +30,32 @@ export function createApp() {
     res.sendFile(path.resolve(__dirname, "../../widget/dist/widget.js"));
   });
 
-  // Dev-only: serves the sample embed pages used to manually verify tenant
-  // isolation end-to-end (two "different websites" using the same widget.js).
-  if (env.nodeEnv === "development") {
-    app.use("/demo", cors(), express.static(path.resolve(__dirname, "../../test-sites")));
-  }
+  // The local demo "websites" used for testing website-content ingestion
+  // and cross-website isolation. In a real deployment, each business's
+  // WEBSITE_URL would point at their own real site instead.
+  app.use("/sites", express.static(path.resolve(__dirname, "../public/sites")));
+
+  // The simple admin portal (plain HTML/JS -- see public/admin/).
+  app.use("/admin", express.static(path.resolve(__dirname, "../public/admin")));
+
+  // Side-by-side keyword vs. semantic comparison harness (see public/compare/).
+  app.use("/compare", express.static(path.resolve(__dirname, "../public/compare")));
+
+  // Self-service "install this on your website" sign-up page.
+  app.use("/register", express.static(path.resolve(__dirname, "../public/register")));
 
   app.use("/api/chat", chatRouter);
-  app.use("/api/widget/config", widgetConfigRouter);
+  app.use("/api/chat-semantic", chatSemanticRouter);
+  app.use("/api/website-config", websiteConfigRouter);
+  app.use("/api/login", customerAuthRouter);
+  app.use("/api/register", registerRouter);
+  app.use("/api/admin/login", adminAuthRouter);
+  app.use("/api/admin/:websiteId/knowledge", adminKnowledgeRouter);
+  app.use("/api/admin/:websiteId/documents", adminDocumentsRouter);
 
-  app.use("/api/auth", adminCors, authRouter);
-  app.use("/api/customer", adminCors, adminApiRateLimiter, customerRouter);
-  app.use("/api/chatbot/settings", adminCors, adminApiRateLimiter, settingsRouter);
-  app.use("/api/knowledge", adminCors, adminApiRateLimiter, knowledgeRouter);
-  app.use("/api/documents", adminCors, adminApiRateLimiter, documentsRouter);
-  app.use("/api/website-import", adminCors, adminApiRateLimiter, websiteImportRouter);
-  app.use("/api/conversations", adminCors, adminApiRateLimiter, conversationsRouter);
-  app.use("/api/leads", adminCors, adminApiRateLimiter, leadsRouter);
-  app.use("/api/analytics", adminCors, adminApiRateLimiter, analyticsRouter);
-  app.use("/api/superadmin", adminCors, adminApiRateLimiter, superAdminRouter);
+  // A single landing page linking to every tool -- registered last so it
+  // never shadows the more specific static routes above.
+  app.use("/", express.static(path.resolve(__dirname, "../public/home")));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,174 +1,156 @@
-# AI Website Assistant
+# Website-Aware Chatbot
 
-A multi-tenant SaaS platform: one chatbot codebase, embedded on any number of
-websites via a single `widget.js` script, where each embed (`data-client-id`)
-is answered strictly from that one business's own knowledge — never mixed
-with another tenant's data, and never invented when the knowledge isn't there.
+A chatbot that answers visitor questions using only a business's own
+knowledge articles, uploaded documents, website content, and (optionally)
+its own live database/API -- **no AI/LLM involved anywhere**. Every answer
+is either stored content returned verbatim, a database value formatted
+deterministically, or a fixed "I don't know, call us" fallback. It never
+generates, rewrites, or guesses an answer.
 
-## How tenant isolation actually works
+Any business can self-register, get an embeddable widget, and manage its
+own knowledge base and documents from an admin portal -- the same backend
+serves any number of websites, each fully isolated by `websiteId`.
 
-- Every table that holds business data has a `customerId` column.
-- The **only** place `clientId` (public, e.g. `PHOTOGRAPHY_001`) is resolved
-  to an internal `customerId` is `resolveActiveCustomer()` in
-  [server/src/routes/chat.routes.ts](server/src/routes/chat.routes.ts). Every
-  downstream call in that request (retrieval, AI prompt, usage, persistence)
-  uses that one resolved id.
-- Knowledge retrieval ([server/src/lib/retrieval/search.ts](server/src/lib/retrieval/search.ts))
-  always issues `WHERE customerId = ...` as its first filter — there is no
-  code path that queries knowledge without it.
-- Admin API routes never take a `customerId` from the request; they take it
-  from the authenticated JWT (`req.auth.customerId`) and every Prisma call is
-  scoped to it. Cross-tenant reads/writes return `404`, not `403` — a tenant
-  can't even confirm another tenant's record exists.
-- Super Admin is the only role that can see more than one tenant, and every
-  such access is written to `AuditLog`.
-- If retrieval finds nothing confident, or the AI itself reports
-  `sufficient: false`, the visitor gets a fixed fallback message and a
-  "Talk to Human" option sourced from that tenant's own configured
-  WhatsApp/phone/email/enquiry URL — never a guess.
-
-This was manually verified end-to-end during development: same `widget.js`
-embedded on two different demo pages, with a hotel bot correctly refusing to
-answer a photography question (and vice versa), and a customer admin token
-getting `404` when probing another tenant's knowledge item by id. See
-`test-sites/` for the two demo pages.
-
-## Project layout
-
-```
-server/   Express + TypeScript API, Prisma (PostgreSQL), Claude integration
-widget/   The embeddable widget.js (Shadow DOM, esbuild bundle)
-admin/    React + Vite + Tailwind admin portal (customer + super admin)
-test-sites/  Demo HTML pages used to manually verify isolation
-```
-
-## Getting started
-
-Prerequisites: Node.js 18+, a PostgreSQL database (local install, or point
-`DATABASE_URL` at a hosted one -- e.g. the one Railway provisions, see
-"Deploying" below). For zero-setup local dev without installing Postgres,
-you can instead set `provider = "sqlite"` in `prisma/schema.prisma` and use
-`DATABASE_URL="file:./dev.db"`.
+## Quick start
 
 ```bash
 npm install
-cd server && npx prisma db push && npx prisma db seed && cd ..
 npm run build:widget
-npm run dev:server    # http://localhost:4000
-npm run dev:admin     # http://localhost:5173
+npm run dev
 ```
 
-Seeded logins (from `server/prisma/seed.ts`):
+This starts the backend on `http://localhost:4000`.
 
-| Role | Email | Password | Notes |
-|---|---|---|---|
-| Super Admin | superadmin@aiwebsiteassistant.dev | SuperAdmin123! | sees all tenants |
-| Business owner (demo) | owner@lumierephoto.test | Password123! | clientId `PHOTOGRAPHY_001` |
-| Business owner (demo) | owner@seasidegrand.test | Password123! | clientId `HOTEL_002` |
-| Business owner (real) | owner@uniquecreations.test | TempPass123! | clientId `UNIQUE_CREATIONS_001` -- change this password in a real deployment |
+- **Register a new website**: http://localhost:4000/register/
+- **Admin portal** (manage knowledge articles + document uploads): http://localhost:4000/admin/
+- **Compare the two matching engines side by side**: http://localhost:4000/compare/
 
-To see the widget answering real AI questions (not just the safe fallback),
-set `ANTHROPIC_API_KEY` in `server/.env` and restart the server. Without a
-key, the chatbot still works correctly — it always falls back to the human
-handoff message instead of guessing, which is the required behavior when AI
-isn't available.
+## How it works end to end
 
-Demo pages (server must be running): `http://localhost:4000/demo/site-a-photography.html`
-and `http://localhost:4000/demo/site-b-hotel.html` — both load the exact
-same `widget.js`.
+1. **Register** a website at `/register/` (business name, category, phone,
+   website URL). This creates a `websiteId`, an admin login, and returns an
+   embed snippet plus the widget's install instructions for that framework.
+2. **Install** the widget by pasting the returned `<script>` tag into the
+   business's site. The widget talks to `/api/chat` (keyword matching) or
+   `/api/chat-semantic` (local sentence-embedding matching) depending on
+   which one was set up -- both are always available for any website.
+3. **Manage content** at `/admin/`: add knowledge articles (title +
+   answer), or upload a PDF/DOC/DOCX/TXT document -- its text is extracted,
+   chunked, and becomes searchable knowledge automatically. Uploaded
+   documents can be viewed or downloaded again from the same screen.
+4. **Answer a question**: for every message, the engine tries these
+   sources in order and stops at the first real match --
+   1. Personal booking status (only for a website's own logged-in
+      visitor, or by a real reference code if the site has a live API --
+      see below)
+   2. General live data (e.g. "do you have rooms available")
+   3. The website's own ingested page content
+   4. Knowledge base articles (including ones extracted from uploads)
+   5. Nothing matched -- a fixed fallback message + "Call Us"
 
-## Embedding on a real site
+## Two matching engines, one comparison tool
 
-```html
-<script
-  src="https://YOUR-DOMAIN.com/widget.js"
-  data-client-id="YOUR_CLIENT_ID">
-</script>
+- `server/src/lib/retrieval/search.ts` -- keyword/TF-IDF style scoring.
+- `server/src/lib/embeddings/` + `server/src/lib/retrieval/semanticSearch.ts`
+  -- local sentence embeddings (`@huggingface/transformers`, runs fully
+  offline, no API key), matched by cosine similarity.
+
+`server/src/engine/answerEngine.ts` and `answerEngineSemantic.ts` are
+deliberate near-duplicates that differ in exactly one line (which scorer
+they call), so `/compare/` isolates that one variable when testing the
+same question against both.
+
+## Connecting a website's own real backend (optional)
+
+A website config can set `liveApiUrl` (see
+`server/src/config/websites.ts`). When set, the engines call that
+business's own backend instead of the local placeholder JSON stores:
+
+- `server/src/integrations/liveHotelApi.ts` is the current adapter --
+  booking status is looked up by **reference code** (e.g. `HB-D7VDEZ`),
+  never by name, since only the person holding that code should see the
+  booking. Room/availability content is pulled live from the business's
+  own API instead of scraping its (possibly client-rendered) website.
+
+Websites without a `liveApiUrl` fall back to the local JSON stores under
+`server/data/` and a simple login for booking status.
+
+## Website isolation
+
+Every website has its own entry in `server/src/config/websites.ts`
+(file-backed, added automatically by `/register/` -- no code changes
+needed for a new tenant). Every lookup -- live data, website content,
+knowledge base, documents, bookings -- is a function that takes
+`websiteId` as its first argument and only ever touches that one
+website's data. `answerEngine.ts` / `answerEngineSemantic.ts` resolve
+`websiteId` exactly once per request; there is no path through the code
+that reads a different website's data while answering a given request.
+
+## Project structure
+
+```
+server/
+  src/
+    config/
+      env.ts               config from environment variables
+      websites.ts           file-backed per-website registry
+    data/
+      knowledgeStore.ts      per-website knowledge articles
+      documentStore.ts       metadata for uploaded documents
+    db/
+      liveDataStore.ts       per-website "live" data (placeholder JSON)
+      bookingStore.ts         per-website login-gated bookings (placeholder JSON)
+    auth/
+      customerAuth.ts, adminAuth.ts, session.ts
+    content/
+      websiteContentIngest.ts   fetches + structures a website's own page content
+    lib/
+      documents/parse.ts        PDF/DOC/DOCX/TXT text extraction + chunking
+      retrieval/search.ts        keyword scorer
+      embeddings/, retrieval/semanticSearch.ts   local embedding scorer
+    intent/                  small classifiers (booking status, live-data, small talk, reference code)
+    integrations/            adapters for a tenant's own real backend
+    engine/
+      answerEngine.ts             keyword-engine orchestration
+      answerEngineSemantic.ts     semantic-engine orchestration
+    routes/
+      chat.routes.ts, chatSemantic.routes.ts
+      register.routes.ts, websiteConfig.routes.ts
+      adminAuth.routes.ts, adminKnowledge.routes.ts, adminDocuments.routes.ts
+      customerAuth.routes.ts
+  public/
+    register/    self-service sign-up page
+    admin/       knowledge + document management portal
+    compare/     side-by-side keyword vs. semantic tester
+    sites/       local demo websites
+  data/          runtime JSON "database" (gitignored -- created automatically)
+widget/
+  src/widget.ts   the embeddable chat widget (Shadow DOM, no external deps)
 ```
 
-The admin portal's **Install Chatbot** page generates this automatically
-per business, plus framework-specific snippets (HTML, WordPress, React,
-Next.js, Shopify).
+## Environment variables (`server/.env`)
 
-## What's implemented
+```
+PORT=4000
+NODE_ENV=development
+DATABASE_URL=./data/live-data.json   # placeholder "live data" store; a real site can use liveApiUrl instead
+```
 
-- Multi-tenant data model with `customerId` isolation on every table
-  (customers, chatbot settings, knowledge, documents, website imports,
-  conversations, messages, leads, unanswered questions).
-- Email/password auth (JWT) with roles `OWNER`, `STAFF`, `SUPER_ADMIN`.
-- Knowledge base CRUD (About/Services/FAQs/Policies), document upload
-  (PDF/DOC/DOCX/TXT, parsed and chunked into searchable knowledge), and a
-  same-origin website crawler that respects `robots.txt` and stages
-  everything as `DRAFT` for the customer to approve before it's used.
-- Tenant-scoped retrieval (TF-IDF style ranking with type-aware synonym
-  boosting — see "Notes on retrieval" below) feeding a Claude tool-call that
-  is forced to return `{ answer, sufficient, quick_replies }`, so the model
-  can't slip an answer past the confidence gate.
-- Two-layer no-hallucination gate: retrieval confidence AND the model's own
-  `sufficient` flag both have to pass before an answer is shown; either
-  failing triggers the fixed fallback + human handoff, never a guess.
-- Human handoff (WhatsApp / call / enquiry form), sourced entirely from
-  each business's own settings, never hardcoded.
-- Deterministic lead-capture flow (name → mobile → email → requirement),
-  independent of the AI so it can't be talked off-script.
-- Embeddable widget: Shadow DOM isolation, mobile-responsive, typing
-  indicator, quick replies, persistent "Talk to Human" access.
-- Customer admin portal: dashboard with real usage/conversation/lead stats,
-  business profile, chatbot branding + handoff config, knowledge base
-  management, conversations, leads, unanswered-questions-to-FAQ workflow,
-  install/embed page.
-- Super Admin portal: create/disable customers, change plans/limits,
-  cross-tenant conversation/lead lookup (audited), plan configuration.
-- Security: rate limiting (chat, auth, admin API), input sanitization,
-  prompt-injection defenses (visitor text is never concatenated into the
-  system prompt; the model is instructed to treat it strictly as data and
-  refuse role/prompt/data-exfiltration requests; answers are forced through
-  a structured tool call), file upload type/size restrictions, JWT auth on
-  every admin/super-admin route, `helmet`, no API keys ever reach the
-  frontend or widget.
-- Usage limits per plan (Starter/Business/Premium), enforced before any AI
-  call is made, with a rolling 30-day reset.
+Per-website business info (name, phone, address, hours) lives in
+`server/data/websites.json` (created by `/register/`), not in environment
+variables -- a single global `HUMAN_PHONE` wouldn't let different tenants
+each have their own number.
 
-## Notes on retrieval (an intentional simplification)
+## Debug mode
 
-Knowledge retrieval uses an in-app TF-IDF-style ranker
-([server/src/lib/retrieval/search.ts](server/src/lib/retrieval/search.ts))
-rather than vector embeddings. This was a deliberate choice for this build:
-it keeps tenant isolation trivially auditable (one Prisma `findMany` with a
-`WHERE customerId` clause, no separate vector store to keep in sync or
-misconfigure), needs no embeddings API key to run, and is more than
-adequate for the size of knowledge base a single business typically has
-(dozens to low hundreds of items). For very large knowledge bases, swapping
-in embeddings (e.g. Voyage AI + pgvector) behind the same
-`retrieveKnowledge()` function would be a contained change — the tenant
-isolation guarantee lives in that function's `WHERE` clause, not in the
-ranking algorithm.
+In development (`NODE_ENV=development`, the default), every `/api/chat`
+and `/api/chat-semantic` response includes a `debug.sources` object
+showing which of Website / Knowledge Base / Database / Human fallback was
+actually used to answer. This is omitted entirely when
+`NODE_ENV=production`.
 
-## Deploying (Railway)
+## What's intentionally NOT here
 
-The backend (`server/`, which also serves `widget.js`) is deployed
-separately from any business's actual website -- the website only ever
-needs the one `<script>` tag from the Install Chatbot page, same as any
-third-party chat widget.
-
-1. Push this repo to GitHub (already done: `github.com/<you>/ai-website-assistant`).
-2. On [railway.app](https://railway.app), **New Project → Deploy from GitHub repo**,
-   select this repo, and set the service's **Root Directory** to `server`.
-3. **Add a PostgreSQL plugin** to the project -- Railway sets `DATABASE_URL` automatically.
-4. Set these environment variables on the service: `JWT_SECRET` (long random string),
-   `ANTHROPIC_API_KEY` (optional), `ADMIN_CORS_ORIGIN` (your deployed admin portal's URL),
-   `APP_BASE_URL` (this service's own public URL once assigned).
-5. Build command: `npm run build`. Start command: `node dist/index.js`
-   (`postinstall` already runs `prisma generate` automatically).
-6. One-time setup after the first deploy, via `railway run`:
-   `npx prisma db push` then `npx prisma db seed`.
-7. Deploy `admin/` separately (Vercel/Netlify work well for a static Vite
-   build) with `VITE_API_BASE_URL` set to the Railway service's public URL.
-
-## Further production hardening
-
-- Move file storage (`UPLOAD_DIR`) to S3 or equivalent object storage --
-  most PaaS containers (including Railway's default) have an ephemeral
-  filesystem, so uploaded documents won't survive a redeploy otherwise.
-- Set a strong, unique `JWT_SECRET` (not the local dev default).
-- Wire up real billing against the `Plan` model.
+No AI/LLM, no lead capture, no billing. `server/data/` is a set of flat
+JSON files standing in for a real database -- swappable for one later
+without changing the calling code's interface.

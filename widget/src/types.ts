@@ -1,39 +1,26 @@
-export interface WidgetConfig {
+export interface WebsiteConfig {
   businessName: string;
-  botName: string;
-  welcomeMessage: string;
-  avatarUrl: string | null;
-  primaryColor: string;
-  buttonColor: string;
-  quickReplies: string[];
-  leadCaptureEnabled: boolean;
-  handoff: HandoffConfig;
+  humanPhone: string | null;
 }
 
-export interface HandoffConfig {
-  whatsapp: string | null;
-  phone: string | null;
-  email: string | null;
-  enquiryUrl: string | null;
+export interface ChatDebugInfo {
+  sources: {
+    database: boolean;
+    website: boolean;
+    knowledgeBase: boolean;
+    humanFallback: boolean;
+  };
 }
 
 export interface ChatResponse {
-  conversationId: string;
-  message: string;
-  quickReplies: string[];
-  humanHandoff: boolean;
-  handoff: HandoffConfig | null;
+  answer: string;
+  humanFallback: boolean;
+  requiresLogin: boolean;
+  callPhone: string | null;
+  debug?: ChatDebugInfo;
 }
 
-export interface LeadStepResponse {
-  conversationId: string;
-  message: string;
-  done?: boolean;
-}
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  humanHandoff?: boolean;
-  handoff?: HandoffConfig | null;
+export interface LoginResponse {
+  sessionToken: string;
+  name: string;
 }

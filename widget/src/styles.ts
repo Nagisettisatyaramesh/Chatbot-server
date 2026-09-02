@@ -33,9 +33,9 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   position: fixed;
   bottom: 92px;
   right: 20px;
-  width: 380px;
+  width: 370px;
   max-width: calc(100vw - 32px);
-  height: min(600px, calc(100dvh - 120px));
+  height: min(560px, calc(100dvh - 120px));
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.28);
@@ -67,12 +67,9 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   width: 32px; height: 32px; border-radius: 50%;
   background: rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; overflow: hidden; flex-shrink: 0;
+  font-size: 16px; flex-shrink: 0;
 }
-.aiwa-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.aiwa-header-text { flex: 1; min-width: 0; }
-.aiwa-header-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aiwa-header-subtitle { font-size: 12px; opacity: 0.85; }
+.aiwa-header-title { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aiwa-close {
   background: transparent; border: none; color: #fff; cursor: pointer;
   font-size: 20px; line-height: 1; padding: 4px; opacity: 0.9;
@@ -89,7 +86,7 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   background: #F7F8FA;
 }
 .aiwa-msg {
-  max-width: 82%;
+  max-width: 85%;
   padding: 10px 13px;
   border-radius: 14px;
   font-size: 14px;
@@ -115,6 +112,13 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   color: #fff;
   border-bottom-right-radius: 4px;
 }
+.aiwa-msg-error {
+  align-self: flex-start;
+  background: #FEF2F2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+  border-bottom-left-radius: 4px;
+}
 
 .aiwa-typing {
   align-self: flex-start;
@@ -138,65 +142,54 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
-.aiwa-quick-replies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 16px 12px;
-  background: #F7F8FA;
-}
-.aiwa-quick-reply {
-  border: 1px solid ${primaryColor};
-  color: ${primaryColor};
+.aiwa-login-form {
+  align-self: stretch;
   background: #fff;
-  border-radius: 999px;
-  padding: 7px 13px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.aiwa-quick-reply:hover { background: ${primaryColor}15; }
-
-.aiwa-handoff-btn {
-  align-self: flex-start;
-  margin-top: -4px;
-  border: 1px solid #d9dce1;
-  background: #fff;
-  color: #1a1a1a;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.aiwa-handoff-btn:hover { background: #f0f1f3; }
-
-.aiwa-handoff-panel {
-  padding: 14px 16px;
-  background: #fff;
-  border-top: 1px solid #ececec;
+  border: 1px solid #e3e5e9;
+  border-radius: 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex-shrink: 0;
 }
-.aiwa-handoff-panel-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 2px; }
-.aiwa-handoff-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid #e3e5e9;
-  background: #fafafa;
-  text-decoration: none;
-  color: #1a1a1a;
+.aiwa-login-form input {
+  border: 1px solid #dfe2e7;
+  border-radius: 8px;
+  padding: 8px 10px;
   font-size: 13px;
+  outline: none;
+}
+.aiwa-login-form input:focus { border-color: ${primaryColor}; }
+.aiwa-login-form-row { display: flex; gap: 8px; }
+.aiwa-login-form-row button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
-.aiwa-handoff-option:hover { background: #f0f1f3; }
+.aiwa-login-submit { background: ${buttonColor}; color: #fff; flex: 1; }
+.aiwa-login-cancel { background: #f0f1f3; color: #444; }
+.aiwa-login-error { color: #b91c1c; font-size: 12px; }
+
+.aiwa-call-btn {
+  align-self: flex-start;
+  margin-top: -4px;
+  border: 1px solid ${primaryColor};
+  background: #fff;
+  color: ${primaryColor};
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.aiwa-call-btn:hover { background: ${primaryColor}12; }
 
 .aiwa-input-row {
   display: flex;
@@ -227,14 +220,6 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
   display: flex; align-items: center; justify-content: center;
 }
 .aiwa-send:disabled { opacity: 0.5; cursor: default; }
-.aiwa-footer-link {
-  text-align: center;
-  font-size: 11px;
-  color: #9aa0a8;
-  padding: 4px 0 8px;
-  background: #fff;
-  flex-shrink: 0;
-}
 
 @media (max-width: 480px) {
   .aiwa-panel {
@@ -243,7 +228,7 @@ export function buildStyles(primaryColor: string, buttonColor: string): string {
     bottom: 8px;
     width: auto;
     max-width: none;
-    height: min(88dvh, 640px);
+    height: min(88dvh, 620px);
     border-radius: 14px;
   }
   .aiwa-launcher { bottom: 16px; right: 16px; }

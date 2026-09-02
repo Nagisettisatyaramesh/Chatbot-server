@@ -3,12 +3,16 @@ import { z } from "zod";
 import { asyncHandler, ApiError } from "../middleware/errorHandler";
 import { chatRateLimiter } from "../middleware/rateLimit";
 import { sanitizePlainText } from "../lib/security/sanitize";
-import { answerQuestion, WebsiteNotFoundError } from "../engine/answerEngine";
+import { answerQuestionSemantic } from "../engine/answerEngineSemantic";
+import { WebsiteNotFoundError } from "../engine/answerEngine";
 import { getWebsiteConfig } from "../config/websites";
 import { env } from "../config/env";
 
-export const chatRouter = Router();
-chatRouter.use(chatRateLimiter);
+// Mirrors chat.routes.ts exactly, except it calls the semantic engine --
+// see answerEngineSemantic.ts for why this is a parallel implementation
+// rather than a shared one.
+export const chatSemanticRouter = Router();
+chatSemanticRouter.use(chatRateLimiter);
 
 const chatSchema = z.object({
   websiteId: z.string().min(1).max(100),
@@ -16,7 +20,7 @@ const chatSchema = z.object({
   sessionToken: z.string().max(200).optional(),
 });
 
-chatRouter.post(
+chatSemanticRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const parsed = chatSchema.safeParse(req.body);
@@ -27,11 +31,10 @@ chatRouter.post(
 
     let result;
     try {
-      result = await answerQuestion(websiteId, message, sessionToken);
+      result = await answerQuestionSemantic(websiteId, message, sessionToken);
     } catch (err) {
       if (err instanceof WebsiteNotFoundError) throw new ApiError(404, "Unknown website");
-      // Never leak technical errors to the visitor -- log server-side, show the same safe fallback.
-      console.error("[chat] answerQuestion failed:", err);
+      console.error("[chat-semantic] answerQuestionSemantic failed:", err);
       const site = getWebsiteConfig(websiteId);
       return res.json({
         answer: "I'm unable to provide that information right now. Would you like to speak with our team?",
@@ -46,7 +49,6 @@ chatRouter.post(
       humanFallback: result.humanFallback,
       requiresLogin: result.requiresLogin,
       callPhone: result.callPhone,
-      // Debug info is dev-only by design -- never sent to production visitors.
       ...(env.isDev ? { debug: { sources: result.sources } } : {}),
     });
   })

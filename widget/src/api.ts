@@ -1,23 +1,27 @@
-import { ChatResponse, LeadStepResponse, WidgetConfig } from "./types";
+import { ChatResponse, LoginResponse, WebsiteConfig } from "./types";
 
 export class WidgetApi {
-  constructor(private baseUrl: string, private clientId: string) {}
+  // chatEndpoint defaults to the keyword engine; a demo/test page can opt
+  // into the semantic engine via the widget script tag's
+  // data-chat-endpoint="/api/chat-semantic" attribute -- same website,
+  // same knowledge, only the matching algorithm differs.
+  constructor(private baseUrl: string, private websiteId: string, private chatEndpoint: string = "/api/chat") {}
 
-  async getConfig(): Promise<WidgetConfig | null> {
+  async getConfig(): Promise<WebsiteConfig | null> {
     try {
-      const resp = await fetch(`${this.baseUrl}/api/widget/config/${encodeURIComponent(this.clientId)}`);
+      const resp = await fetch(`${this.baseUrl}/api/website-config/${encodeURIComponent(this.websiteId)}`);
       if (!resp.ok) return null;
-      return (await resp.json()) as WidgetConfig;
+      return (await resp.json()) as WebsiteConfig;
     } catch {
       return null;
     }
   }
 
-  async sendMessage(visitorId: string, message: string, conversationId: string | null): Promise<ChatResponse> {
-    const resp = await fetch(`${this.baseUrl}/api/chat`, {
+  async sendMessage(message: string, sessionToken: string | null): Promise<ChatResponse> {
+    const resp = await fetch(`${this.baseUrl}${this.chatEndpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: this.clientId, visitorId, message, conversationId: conversationId ?? undefined }),
+      body: JSON.stringify({ websiteId: this.websiteId, message, sessionToken: sessionToken ?? undefined }),
     });
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}));
@@ -26,23 +30,14 @@ export class WidgetApi {
     return resp.json();
   }
 
-  async startLead(visitorId: string, conversationId: string | null): Promise<LeadStepResponse> {
-    const resp = await fetch(`${this.baseUrl}/api/chat/lead/start`, {
+  async login(username: string, password: string): Promise<LoginResponse> {
+    const resp = await fetch(`${this.baseUrl}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: this.clientId, visitorId, conversationId: conversationId ?? undefined }),
+      body: JSON.stringify({ websiteId: this.websiteId, username, password }),
     });
-    if (!resp.ok) throw new Error("Could not start enquiry.");
-    return resp.json();
-  }
-
-  async replyLead(conversationId: string, answer: string): Promise<LeadStepResponse> {
-    const resp = await fetch(`${this.baseUrl}/api/chat/lead/reply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: this.clientId, conversationId, answer }),
-    });
-    if (!resp.ok) throw new Error("Could not continue enquiry.");
-    return resp.json();
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(body.error ?? "Invalid username or password");
+    return body;
   }
 }
