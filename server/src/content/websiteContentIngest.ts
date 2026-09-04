@@ -1,5 +1,7 @@
 import * as cheerio from "cheerio";
 import { fetchLiveRoomTypes, formatRoomTypeSummary } from "../integrations/liveHotelApi";
+import { fetchGenericInventory, formatInventoryItemSummary } from "../integrations/genericDataApi";
+import { renderPageHtml } from "./headlessRender";
 
 export interface ContentSection {
   id: string;
@@ -113,13 +115,54 @@ async function buildLiveApiSections(liveApiUrl: string): Promise<ContentSection[
   }));
 }
 
+// Same idea as buildLiveApiSections, but for any self-service customer
+// who connected their own backend via the documented generic contract
+// (see CUSTOMER_API_CONTRACT.md) instead of a hand-built adapter.
+async function buildCustomApiSections(customApiUrl: string): Promise<ContentSection[]> {
+  const items = await fetchGenericInventory(customApiUrl);
+  return items.map((item) => ({
+    id: `custom-inventory-${item.id}`,
+    title: item.name,
+    content: formatInventoryItemSummary(item),
+  }));
+}
+
+// Shared by both the plain fetch() path and the headless-render fallback
+// below -- same three strategies in order of signal quality, whichever
+// HTML they're handed.
+function extractSections(html: string): ContentSection[] {
+  const $ = cheerio.load(html);
+  cleanDoc($);
+
+  let sections = extractExplicitSections($);
+  if (sections.length === 0) {
+    const container = pickMainContainer($);
+    sections = extractByHeadings($, container);
+    if (sections.length === 0) sections = extractByChunking(container);
+  }
+  return sections;
+}
+
+// A plain fetch() against a client-rendered SPA (React/Vue/Angular) comes
+// back as basically an empty shell -- the real content only exists after
+// the page's JavaScript runs. This is the signal that a headless-browser
+// render is worth the extra cost, rather than running one for every site.
+const WEAK_CONTENT_CHAR_THRESHOLD = 100;
+
+function isWeak(sections: ContentSection[]): boolean {
+  const totalChars = sections.reduce((sum, s) => sum + s.content.length, 0);
+  return totalChars < WEAK_CONTENT_CHAR_THRESHOLD;
+}
+
 // Real "ingestion" of the current website's own content -- not a hardcoded
 // data file, and not limited to sites we authored ourselves. Tries three
-// strategies in order of signal quality, so this works whether the target
-// is one of our own demo pages OR an arbitrary real business's existing
-// website. Fails soft (empty sections) on network/parse errors -- website
-// content is one of several sources, not a hard dependency.
-export async function getWebsiteContent(websiteUrl: string, websiteId: string, liveApiUrl?: string): Promise<ContentSection[]> {
+// text-extraction strategies in order of signal quality against a plain
+// fetch() first (fast, works for the vast majority of sites); if that
+// comes back essentially empty, retries by actually rendering the page in
+// a browser (see headlessRender.ts) so JavaScript-built content becomes
+// visible too. Fails soft (empty sections) on network/parse errors --
+// website content is one of several sources, not a hard dependency.
+export async function getWebsiteContent(websiteUrl: string, websiteId: string, liveApiUrl?: string, customApiUrl?: string): Promise<ContentSection[]> {
   const cached = cache.get(websiteId);
   let sections: ContentSection[];
 
@@ -130,15 +173,16 @@ export async function getWebsiteContent(websiteUrl: string, websiteId: string, l
       const resp = await fetch(websiteUrl, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "ChatbotContentIngest/1.0" } });
       if (!resp.ok) throw new Error(`Website responded with ${resp.status}`);
       const html = await resp.text();
-      const $ = cheerio.load(html);
-      cleanDoc($);
+      sections = extractSections(html);
 
-      sections = extractExplicitSections($);
-      if (sections.length === 0) {
-        const container = pickMainContainer($);
-        sections = extractByHeadings($, container);
-        if (sections.length === 0) sections = extractByChunking(container);
+      if (isWeak(sections)) {
+        const renderedHtml = await renderPageHtml(websiteUrl);
+        if (renderedHtml) {
+          const renderedSections = extractSections(renderedHtml);
+          if (!isWeak(renderedSections)) sections = renderedSections;
+        }
       }
+
       cache.set(websiteId, { sections, fetchedAt: Date.now() });
     } catch (err) {
       console.error(`[website-content] failed to ingest ${websiteUrl}:`, err instanceof Error ? err.message : err);
@@ -149,6 +193,10 @@ export async function getWebsiteContent(websiteUrl: string, websiteId: string, l
   if (liveApiUrl) {
     const liveSections = await buildLiveApiSections(liveApiUrl);
     return [...liveSections, ...sections];
+  }
+  if (customApiUrl) {
+    const customSections = await buildCustomApiSections(customApiUrl);
+    return [...customSections, ...sections];
   }
   return sections;
 }

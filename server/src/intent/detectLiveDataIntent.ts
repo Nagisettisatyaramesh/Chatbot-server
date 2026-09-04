@@ -14,3 +14,13 @@ export function needsLiveData(message: string): boolean {
   const hasAvailability = AVAILABILITY_WORDS.some((w) => lower.includes(w));
   return hasSubject && hasAvailability;
 }
+
+// For a self-service customer (customApiUrl), we can't hardcode SUBJECT_WORDS
+// -- their "subject" is whatever they call their own inventory ("haircut",
+// "bike", "table"), which we only know at runtime from their own data. So
+// for that case the availability word alone is the gate; which specific
+// item (if any) is resolved separately against their real inventory names.
+export function hasAvailabilityWord(message: string): boolean {
+  const lower = message.toLowerCase();
+  return AVAILABILITY_WORDS.some((w) => lower.includes(w));
+}

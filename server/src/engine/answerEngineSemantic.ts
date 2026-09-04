@@ -1,15 +1,17 @@
 import { getWebsiteConfig } from "../config/websites";
 import { getKnowledgeBase } from "../data/knowledgeStore";
+import { recordUnansweredQuestion } from "../data/unansweredStore";
 import { getLiveData } from "../db/liveDataStore";
 import { getBookingsForUser, Booking } from "../db/bookingStore";
 import { getWebsiteContent } from "../content/websiteContentIngest";
 import { scoreMatchesSemantic } from "../lib/retrieval/semanticSearch";
-import { needsLiveData } from "../intent/detectLiveDataIntent";
+import { needsLiveData, hasAvailabilityWord } from "../intent/detectLiveDataIntent";
 import { isBookingStatusQuestion } from "../intent/detectBookingStatusIntent";
 import { extractBookingReference } from "../intent/extractBookingReference";
 import { detectSmallTalk } from "../intent/detectSmallTalk";
 import { getSession } from "../auth/session";
 import { fetchBookingByReference, fetchLiveRoomTypes, formatBookingStatus, formatRoomTypeSummary, mentionsSpecificRoomType, findMentionedRoomType } from "../integrations/liveHotelApi";
+import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem } from "../integrations/genericDataApi";
 import { AnswerResult, SourcesUsed, FALLBACK_ANSWER, WebsiteNotFoundError } from "./answerEngine";
 
 // This is a DELIBERATE near-duplicate of answerEngine.ts, not a refactor
@@ -82,6 +84,33 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
         sources,
       };
     }
+  } else if (site.customApiUrl) {
+    const reference = extractBookingReference(message);
+    if (reference) {
+      const booking = await fetchGenericBooking(site.customApiUrl, reference);
+      sources.database = true;
+      if (!booking) {
+        return {
+          answer: `I couldn't find a booking with reference "${reference}". Please double-check the code, or call us.`,
+          humanFallback: false,
+          requiresLogin: false,
+          callPhone: site.humanPhone,
+          sources,
+        };
+      }
+      const dateRange = booking.endDate ? `${booking.startDate} to ${booking.endDate}` : booking.startDate;
+      const answer = `Your booking ${booking.reference} (${booking.label}) for ${dateRange} is currently: ${booking.status}.`;
+      return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+    }
+    if (isBookingStatusQuestion(message)) {
+      return {
+        answer: "Please share your booking reference code so I can look up your reservation.",
+        humanFallback: false,
+        requiresLogin: false,
+        callPhone: null,
+        sources,
+      };
+    }
   } else if (isBookingStatusQuestion(message)) {
     const session = getSession(sessionToken, websiteId);
     if (!session || !session.userId) {
@@ -99,7 +128,7 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
     return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
   }
 
-  if (needsLiveData(message)) {
+  if (needsLiveData(message) || (site.customApiUrl && hasAvailabilityWord(message))) {
     if (site.liveApiUrl) {
       const roomTypes = await fetchLiveRoomTypes(site.liveApiUrl);
       if (roomTypes.length > 0) {
@@ -115,6 +144,23 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
         const total = roomTypes.reduce((sum, rt) => sum + rt.availableCount, 0);
         const byType = roomTypes.map((rt) => `${rt.name}: ${rt.availableCount} available`).join(", ");
         return { answer: `We currently have ${total} room(s) available in total (${byType}).`, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+      }
+    } else if (site.customApiUrl) {
+      const items = await fetchGenericInventory(site.customApiUrl);
+      const withCounts = items.filter((i) => i.availableCount !== null);
+      if (withCounts.length > 0) {
+        sources.database = true;
+        const specific = findMentionedItem(message, withCounts);
+        if (specific) {
+          const answer =
+            (specific.availableCount as number) > 0
+              ? `Yes, we currently have ${specific.availableCount} ${specific.name}${specific.availableCount === 1 ? "" : "s"} available.`
+              : `Sorry, we don't have any ${specific.name} available right now.`;
+          return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+        }
+        const total = withCounts.reduce((sum, i) => sum + (i.availableCount as number), 0);
+        const byItem = withCounts.map((i) => `${i.name}: ${i.availableCount} available`).join(", ");
+        return { answer: `We currently have ${total} available in total (${byItem}).`, humanFallback: false, requiresLogin: false, callPhone: null, sources };
       }
     } else {
       const liveData = getLiveData(websiteId);
@@ -141,7 +187,7 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
   // The one line that differs from answerEngine.ts: semantic similarity
   // instead of keyword overlap. Everything else about the priority order
   // and verbatim-answer behavior is identical.
-  const contentSections = await getWebsiteContent(site.websiteUrl, site.websiteId, site.liveApiUrl);
+  const contentSections = await getWebsiteContent(site.websiteUrl, site.websiteId, site.liveApiUrl, site.customApiUrl);
   const knowledgeItems = getKnowledgeBase(site.websiteId);
 
   const [websiteMatches, knowledgeMatches] = await Promise.all([
@@ -166,6 +212,17 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
     return { answer: best.content, humanFallback: false, requiresLogin: false, callPhone: null, sources };
   }
 
+  // See answerEngine.ts Priority 3.5 -- list all inventory as a last
+  // resort for a self-service customer's own data rather than giving up.
+  if (site.customApiUrl) {
+    const items = await fetchGenericInventory(site.customApiUrl);
+    if (items.length > 0) {
+      sources.website = true;
+      return { answer: items.map(formatInventoryItemSummary).join("\n\n"), humanFallback: false, requiresLogin: false, callPhone: null, sources };
+    }
+  }
+
   sources.humanFallback = true;
+  recordUnansweredQuestion(websiteId, message);
   return { answer: FALLBACK_ANSWER, humanFallback: true, requiresLogin: false, callPhone: site.humanPhone, sources };
 }

@@ -16,6 +16,7 @@
       hours: document.getElementById("hours").value.trim(),
       adminUsername: document.getElementById("adminUsername").value.trim(),
       adminPassword: document.getElementById("adminPassword").value,
+      customApiUrl: document.getElementById("customApiUrl").value.trim(),
     };
 
     const submitBtn = document.getElementById("submitBtn");

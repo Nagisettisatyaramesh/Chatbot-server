@@ -12,3 +12,7 @@ server/uploads/
 server/data/
 *.log
 .DS_Store
+# Local scratch -- a throwaway repo clone used to verify a push, and a
+# PPTX-generation working directory (its own package.json/node_modules).
+verify-clone/
+pptx-build/

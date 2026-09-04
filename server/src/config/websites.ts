@@ -17,8 +17,17 @@ export interface WebsiteConfig {
   // Optional: base URL of the tenant's OWN backend API (e.g. a real hotel's
   // booking system). When set, the answer engines read REAL bookings and
   // REAL room inventory from that API instead of the local placeholder
-  // JSON stores -- see integrations/liveHotelApi.ts.
+  // JSON stores -- see integrations/liveHotelApi.ts. This is a hand-built
+  // adapter for ONE tenant's existing API shape, not something any
+  // self-service customer can set for themselves.
   liveApiUrl?: string;
+  // Optional: base URL of a tenant's own backend implementing OUR
+  // documented generic contract (see CUSTOMER_API_CONTRACT.md) -- this is
+  // the self-service equivalent of liveApiUrl. Any customer who registers
+  // and implements the two documented endpoints on their own backend can
+  // set this themselves, no custom adapter code required on our side.
+  // See integrations/genericDataApi.ts.
+  customApiUrl?: string;
 }
 
 const DATA_FILE = path.resolve(__dirname, "../../data/websites.json");
@@ -42,6 +51,23 @@ export function getWebsiteConfig(websiteId: string): WebsiteConfig | null {
 
 export function listWebsites(): WebsiteConfig[] {
   return loadAll();
+}
+
+// Lets a business add (or remove) their self-service database connection
+// AFTER registration, from the admin portal -- their backend may not have
+// existed yet at signup time. Passing an empty string clears it.
+export function setCustomApiUrl(websiteId: string, customApiUrl: string): WebsiteConfig | null {
+  const all = loadAll();
+  const idx = all.findIndex((w) => w.websiteId === websiteId);
+  if (idx === -1) return null;
+  if (customApiUrl) {
+    all[idx] = { ...all[idx], customApiUrl };
+  } else {
+    const { customApiUrl: _drop, ...rest } = all[idx];
+    all[idx] = rest;
+  }
+  saveAll(all);
+  return all[idx];
 }
 
 function slugify(input: string): string {

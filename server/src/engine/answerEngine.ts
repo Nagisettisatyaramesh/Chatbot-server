@@ -1,15 +1,17 @@
 import { getWebsiteConfig } from "../config/websites";
 import { getKnowledgeBase } from "../data/knowledgeStore";
+import { recordUnansweredQuestion } from "../data/unansweredStore";
 import { getLiveData } from "../db/liveDataStore";
 import { getBookingsForUser, Booking } from "../db/bookingStore";
 import { getWebsiteContent } from "../content/websiteContentIngest";
 import { scoreMatches, ScorableDoc } from "../lib/retrieval/search";
-import { needsLiveData } from "../intent/detectLiveDataIntent";
+import { needsLiveData, hasAvailabilityWord } from "../intent/detectLiveDataIntent";
 import { isBookingStatusQuestion } from "../intent/detectBookingStatusIntent";
 import { extractBookingReference } from "../intent/extractBookingReference";
 import { detectSmallTalk } from "../intent/detectSmallTalk";
 import { getSession } from "../auth/session";
 import { fetchBookingByReference, fetchLiveRoomTypes, formatBookingStatus, formatRoomTypeSummary, mentionsSpecificRoomType, findMentionedRoomType } from "../integrations/liveHotelApi";
+import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem } from "../integrations/genericDataApi";
 
 export const FALLBACK_ANSWER = "I'm sorry, I don't have enough information to answer that.";
 
@@ -108,6 +110,36 @@ export async function answerQuestion(websiteId: string, message: string, session
         sources,
       };
     }
+  } else if (site.customApiUrl) {
+    // Same reasoning as the liveApiUrl branch above, but for a self-service
+    // customer's own backend speaking our documented generic contract
+    // instead of a hand-built adapter -- see CUSTOMER_API_CONTRACT.md.
+    const reference = extractBookingReference(message);
+    if (reference) {
+      const booking = await fetchGenericBooking(site.customApiUrl, reference);
+      sources.database = true;
+      if (!booking) {
+        return {
+          answer: `I couldn't find a booking with reference "${reference}". Please double-check the code, or call us.`,
+          humanFallback: false,
+          requiresLogin: false,
+          callPhone: site.humanPhone,
+          sources,
+        };
+      }
+      const dateRange = booking.endDate ? `${booking.startDate} to ${booking.endDate}` : booking.startDate;
+      const answer = `Your booking ${booking.reference} (${booking.label}) for ${dateRange} is currently: ${booking.status}.`;
+      return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+    }
+    if (isBookingStatusQuestion(message)) {
+      return {
+        answer: "Please share your booking reference code so I can look up your reservation.",
+        humanFallback: false,
+        requiresLogin: false,
+        callPhone: null,
+        sources,
+      };
+    }
   } else if (isBookingStatusQuestion(message)) {
     const session = getSession(sessionToken, websiteId);
     if (!session || !session.userId) {
@@ -127,7 +159,10 @@ export async function answerQuestion(websiteId: string, message: string, session
 
   // Priority 1b: general live data (e.g. overall room availability) --
   // this one small, curated, website-scoped snapshot, never a data dump.
-  if (needsLiveData(message)) {
+  // The customApiUrl OR-clause is needed because a self-service customer's
+  // "subject" word (their own item names) can't be hardcoded like the
+  // hotel-shaped SUBJECT_WORDS list -- see hasAvailabilityWord.
+  if (needsLiveData(message) || (site.customApiUrl && hasAvailabilityWord(message))) {
     if (site.liveApiUrl) {
       const roomTypes = await fetchLiveRoomTypes(site.liveApiUrl);
       if (roomTypes.length > 0) {
@@ -146,6 +181,23 @@ export async function answerQuestion(websiteId: string, message: string, session
         const total = roomTypes.reduce((sum, rt) => sum + rt.availableCount, 0);
         const byType = roomTypes.map((rt) => `${rt.name}: ${rt.availableCount} available`).join(", ");
         return { answer: `We currently have ${total} room(s) available in total (${byType}).`, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+      }
+    } else if (site.customApiUrl) {
+      const items = await fetchGenericInventory(site.customApiUrl);
+      const withCounts = items.filter((i) => i.availableCount !== null);
+      if (withCounts.length > 0) {
+        sources.database = true;
+        const specific = findMentionedItem(message, withCounts);
+        if (specific) {
+          const answer =
+            (specific.availableCount as number) > 0
+              ? `Yes, we currently have ${specific.availableCount} ${specific.name}${specific.availableCount === 1 ? "" : "s"} available.`
+              : `Sorry, we don't have any ${specific.name} available right now.`;
+          return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+        }
+        const total = withCounts.reduce((sum, i) => sum + (i.availableCount as number), 0);
+        const byItem = withCounts.map((i) => `${i.name}: ${i.availableCount} available`).join(", ");
+        return { answer: `We currently have ${total} available in total (${byItem}).`, humanFallback: false, requiresLogin: false, callPhone: null, sources };
       }
     } else {
       const liveData = getLiveData(websiteId);
@@ -175,7 +227,7 @@ export async function answerQuestion(websiteId: string, message: string, session
   // Priority 2 & 3: website content and knowledge base -- pure keyword
   // relevance matching, the winning article's content returned verbatim
   // (never rewritten or summarized, since there's no AI to do that).
-  const contentSections = await getWebsiteContent(site.websiteUrl, site.websiteId, site.liveApiUrl);
+  const contentSections = await getWebsiteContent(site.websiteUrl, site.websiteId, site.liveApiUrl, site.customApiUrl);
   const knowledgeItems = getKnowledgeBase(site.websiteId);
 
   const websiteMatches = scoreMatches(message, contentSections);
@@ -198,8 +250,23 @@ export async function answerQuestion(websiteId: string, message: string, session
     return { answer: best.content, humanFallback: false, requiresLogin: false, callPhone: null, sources };
   }
 
-  // Priority 4 / nothing found anywhere: never guess.
+  // Priority 3.5: nothing matched a specific topic, but a self-service
+  // customer's own inventory data exists (no hotel-shaped "room" trigger
+  // to key off generically) -- list all of it rather than giving up on
+  // real, available data.
+  if (site.customApiUrl) {
+    const items = await fetchGenericInventory(site.customApiUrl);
+    if (items.length > 0) {
+      sources.website = true;
+      return { answer: items.map(formatInventoryItemSummary).join("\n\n"), humanFallback: false, requiresLogin: false, callPhone: null, sources };
+    }
+  }
+
+  // Priority 4 / nothing found anywhere: never guess -- but log it, since
+  // an unanswered question is exactly the signal an admin needs to see to
+  // know what knowledge article to add next.
   sources.humanFallback = true;
+  recordUnansweredQuestion(websiteId, message);
   return { answer: FALLBACK_ANSWER, humanFallback: true, requiresLogin: false, callPhone: site.humanPhone, sources };
 }
 

@@ -13,9 +13,13 @@
   function showApp() {
     loginView.classList.add("hidden");
     appView.classList.remove("hidden");
-    document.getElementById("pageTitle").textContent = `Knowledge Admin -- ${websiteId}`;
+    document.getElementById("siteSlugOut").textContent = websiteId;
+    document.getElementById("siteNameOut").textContent = websiteId;
+    loadBusinessName();
     loadItems();
     loadDocuments();
+    loadSettings();
+    loadUnanswered();
   }
 
   function showLogin() {
@@ -46,10 +50,19 @@
     return data;
   }
 
+  async function loadBusinessName() {
+    try {
+      const cfg = await fetch(`${API_BASE}/api/website-config/${websiteId}`).then((r) => (r.ok ? r.json() : null));
+      if (cfg && cfg.businessName) document.getElementById("siteNameOut").textContent = cfg.businessName;
+    } catch {
+      // non-fatal -- the Website ID is already shown
+    }
+  }
+
   document.getElementById("loginBtn").addEventListener("click", async () => {
     loginError.classList.add("hidden");
-    const site = document.getElementById("loginWebsiteId").value;
-    const username = document.getElementById("loginUsername").value;
+    const site = document.getElementById("loginWebsiteId").value.trim();
+    const username = document.getElementById("loginUsername").value.trim();
     const password = document.getElementById("loginPassword").value;
     try {
       const resp = await fetch(`${API_BASE}/api/admin/login`, {
@@ -82,7 +95,7 @@
     editingId = null;
     document.getElementById("itemTitle").value = "";
     document.getElementById("itemContent").value = "";
-    document.getElementById("formTitle").textContent = "Add Knowledge Article";
+    document.getElementById("formTitle").textContent = "Add an article";
     document.getElementById("saveBtn").textContent = "Add Article";
     document.getElementById("cancelEditBtn").classList.add("hidden");
     formError.classList.add("hidden");
@@ -105,8 +118,11 @@
       } else {
         await api(`/api/admin/${websiteId}/knowledge`, { method: "POST", body: JSON.stringify({ title, content }) });
       }
+      const resolvingId = pendingUnansweredId;
+      pendingUnansweredId = null;
       resetForm();
       loadItems();
+      if (resolvingId) resolveUnanswered(resolvingId, { silent: true });
     } catch (err) {
       formError.textContent = err.message;
       formError.classList.remove("hidden");
@@ -117,7 +133,7 @@
     editingId = item.id;
     document.getElementById("itemTitle").value = item.title;
     document.getElementById("itemContent").value = item.content;
-    document.getElementById("formTitle").textContent = "Edit Knowledge Article";
+    document.getElementById("formTitle").textContent = "Edit article";
     document.getElementById("saveBtn").textContent = "Save Changes";
     document.getElementById("cancelEditBtn").classList.remove("hidden");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -143,19 +159,19 @@
       empty.classList.toggle("hidden", items.length > 0);
       for (const item of items) {
         const row = document.createElement("div");
-        row.className = "item-row";
+        row.className = "row";
         row.innerHTML = `
           <div>
-            <div class="item-title"></div>
-            <div class="item-content"></div>
+            <div class="row-title"></div>
+            <div class="row-sub"></div>
           </div>
-          <div class="item-actions">
-            <button class="secondary edit-btn">Edit</button>
-            <button class="danger delete-btn">Delete</button>
+          <div class="row-actions">
+            <button class="btn-secondary edit-btn">Edit</button>
+            <button class="btn-danger delete-btn">Delete</button>
           </div>
         `;
-        row.querySelector(".item-title").textContent = item.title;
-        row.querySelector(".item-content").textContent = item.content;
+        row.querySelector(".row-title").textContent = item.title;
+        row.querySelector(".row-sub").textContent = item.content;
         row.querySelector(".edit-btn").addEventListener("click", () => startEdit(item));
         row.querySelector(".delete-btn").addEventListener("click", () => removeItem(item.id));
         list.appendChild(row);
@@ -176,8 +192,8 @@
     if (!file) return;
 
     uploadError.classList.add("hidden");
-    uploadStatus.classList.remove("hidden", "success");
-    uploadStatus.classList.add("muted");
+    uploadStatus.classList.remove("hidden");
+    uploadStatus.className = "muted-note";
     uploadStatus.textContent = "Uploading and reading the document...";
 
     const formData = new FormData();
@@ -196,8 +212,7 @@
       }
       if (!resp.ok) throw new Error(data.error || "Upload failed");
 
-      uploadStatus.classList.remove("muted");
-      uploadStatus.classList.add("success");
+      uploadStatus.className = "success-note";
       uploadStatus.textContent = `Added ${data.chunkCount} knowledge chunk${data.chunkCount === 1 ? "" : "s"} from "${data.filename}".`;
       loadItems();
       loadDocuments();
@@ -268,20 +283,20 @@
       empty.classList.toggle("hidden", docs.length > 0);
       for (const doc of docs) {
         const row = document.createElement("div");
-        row.className = "item-row";
+        row.className = "row";
         row.innerHTML = `
           <div>
-            <div class="item-title"></div>
-            <div class="item-content"></div>
+            <div class="row-title"></div>
+            <div class="row-meta"></div>
           </div>
-          <div class="item-actions">
-            <button class="secondary view-btn">View</button>
-            <button class="secondary download-btn">Download</button>
-            <button class="danger delete-btn">Delete</button>
+          <div class="row-actions">
+            <button class="btn-secondary view-btn">View</button>
+            <button class="btn-secondary download-btn">Download</button>
+            <button class="btn-danger delete-btn">Delete</button>
           </div>
         `;
-        row.querySelector(".item-title").textContent = doc.filename;
-        row.querySelector(".item-content").textContent = `${formatBytes(doc.sizeBytes)} -- ${doc.chunkIds.length} knowledge chunk${doc.chunkIds.length === 1 ? "" : "s"} -- uploaded ${new Date(doc.uploadedAt).toLocaleString()}`;
+        row.querySelector(".row-title").textContent = doc.filename;
+        row.querySelector(".row-meta").textContent = `${formatBytes(doc.sizeBytes)} · ${doc.chunkIds.length} knowledge chunk${doc.chunkIds.length === 1 ? "" : "s"} · uploaded ${new Date(doc.uploadedAt).toLocaleString()}`;
         row.querySelector(".view-btn").addEventListener("click", () => openDocument(doc, false));
         row.querySelector(".download-btn").addEventListener("click", () => openDocument(doc, true));
         row.querySelector(".delete-btn").addEventListener("click", () => removeDocument(doc.id));
@@ -291,6 +306,100 @@
       list.innerHTML = `<p class="error">${err.message}</p>`;
     }
   }
+
+  // -- Unanswered questions ------------------------------------------------
+
+  let pendingUnansweredId = null;
+
+  function answerUnanswered(item) {
+    pendingUnansweredId = item.id;
+    document.getElementById("itemTitle").value = item.message;
+    document.getElementById("itemContent").focus();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function resolveUnanswered(id, opts = {}) {
+    try {
+      await api(`/api/admin/${websiteId}/unanswered/${id}/resolve`, { method: "POST" });
+      loadUnanswered();
+    } catch (err) {
+      if (!opts.silent) alert(err.message);
+    }
+  }
+
+  async function dismissUnanswered(id) {
+    try {
+      await api(`/api/admin/${websiteId}/unanswered/${id}`, { method: "DELETE" });
+      loadUnanswered();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function loadUnanswered() {
+    const list = document.getElementById("unansweredList");
+    const empty = document.getElementById("unansweredEmptyState");
+    const countEl = document.getElementById("unansweredCount");
+    const flag = document.getElementById("unansweredFlag");
+    const flagCount = document.getElementById("unansweredFlagCount");
+    try {
+      const items = await api(`/api/admin/${websiteId}/unanswered`);
+      countEl.textContent = items.length;
+      flag.classList.toggle("hidden", items.length === 0);
+      flagCount.textContent = items.length;
+      list.innerHTML = "";
+      empty.classList.toggle("hidden", items.length > 0);
+      for (const item of items) {
+        const row = document.createElement("div");
+        row.className = "row unanswered-row";
+        row.innerHTML = `
+          <div>
+            <div class="row-title"></div>
+            <div class="row-meta"></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-secondary answer-btn">Answer</button>
+            <button class="btn-danger dismiss-btn">Dismiss</button>
+          </div>
+        `;
+        row.querySelector(".row-title").textContent = item.message;
+        row.querySelector(".row-meta").textContent = `asked ${item.count}× · last ${new Date(item.lastAskedAt).toLocaleDateString()}`;
+        row.querySelector(".answer-btn").addEventListener("click", () => answerUnanswered(item));
+        row.querySelector(".dismiss-btn").addEventListener("click", () => dismissUnanswered(item.id));
+        list.appendChild(row);
+      }
+    } catch (err) {
+      list.innerHTML = `<p class="error">${err.message}</p>`;
+    }
+  }
+
+  // -- Database connection (advanced) ------------------------------------
+
+  async function loadSettings() {
+    try {
+      const settings = await api(`/api/admin/${websiteId}/settings`);
+      document.getElementById("customApiUrlInput").value = settings.customApiUrl || "";
+    } catch (err) {
+      // non-fatal -- leave the field blank rather than blocking the page
+    }
+  }
+
+  document.getElementById("saveSettingsBtn").addEventListener("click", async () => {
+    const settingsError = document.getElementById("settingsError");
+    const settingsStatus = document.getElementById("settingsStatus");
+    settingsError.classList.add("hidden");
+    settingsStatus.classList.add("hidden");
+    const customApiUrl = document.getElementById("customApiUrlInput").value.trim();
+    try {
+      await api(`/api/admin/${websiteId}/settings`, { method: "PUT", body: JSON.stringify({ customApiUrl }) });
+      settingsStatus.className = "success-note";
+      settingsStatus.textContent = customApiUrl ? "Saved. Your database is now connected." : "Saved. Database connection removed.";
+      settingsStatus.classList.remove("hidden");
+    } catch (err) {
+      settingsError.textContent = err.message;
+      settingsError.classList.remove("hidden");
+    }
+  });
 
   if (sessionToken && websiteId) showApp();
 })();

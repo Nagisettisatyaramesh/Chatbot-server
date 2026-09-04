@@ -16,5 +16,8 @@
     "onnxruntime-node@1.24.3": true,
     "protobufjs@7.6.6": true,
     "sharp@0.34.5": true
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
   }
 }

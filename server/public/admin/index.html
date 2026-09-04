@@ -4,89 +4,292 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Knowledge Admin</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-  :root { --primary: #4F46E5; --bg: #f7f8fa; --border: #e3e5e9; }
+  :root {
+    --ink: #14110f;
+    --ink-soft: #292420;
+    --page-bg: #efe6d4;
+    --page-bg-2: #e6dabf;
+    --paper: #fffef9;
+    --paper-dim: #f4efe1;
+    --paper-line: #ded2b4;
+    --brass: #a8672d;
+    --brass-deep: #7a4a1e;
+    --brass-tint: #a8672d1f;
+    --moss: #3f5a4b;
+    --moss-tint: #3f5a4b14;
+    --flag: #b5471f;
+    --flag-tint: #b5471f16;
+    --red: #a4432c;
+    --text: #241f17;
+    --text-dim: #6e6455;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Manrope", -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+  }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: var(--bg); color: #1a1a1a; }
-  header { background: #fff; border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
-  header h1 { font-size: 18px; margin: 0; }
-  main { max-width: 800px; margin: 32px auto; padding: 0 20px 60px; }
-  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #444; }
-  input, textarea, select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; margin-bottom: 12px; }
-  textarea { min-height: 90px; resize: vertical; }
-  button { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  button:hover { opacity: 0.92; }
-  button.secondary { background: #fff; color: #444; border: 1px solid var(--border); }
-  button.danger { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; }
-  .item-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
-  .item-row:last-child { border-bottom: none; }
-  .item-title { font-weight: 600; margin-bottom: 4px; }
-  .item-content { color: #555; font-size: 13px; white-space: pre-wrap; }
-  .item-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .item-actions button { padding: 6px 10px; font-size: 12px; }
-  .error { color: #b91c1c; font-size: 13px; margin-bottom: 12px; }
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 10% -10%, var(--page-bg-2) 0%, transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, var(--page-bg-2) 0%, transparent 55%);
+    color: var(--text);
+    font-family: var(--body);
+    min-height: 100vh;
+  }
+  a { color: var(--brass-deep); }
   .hidden { display: none !important; }
-  .muted { color: #888; font-size: 13px; }
-  .success { color: #15803d; font-size: 13px; }
-  #logoutBtn { background: #fff; color: #444; border: 1px solid var(--border); }
+
+  /* -- top bar --------------------------------------------------- */
+  .topbar {
+    background: var(--paper);
+    border-bottom: 1px solid var(--paper-line);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo { height: 24px; width: auto; display: block; }
+  .brand-sep { width: 1px; height: 18px; background: var(--paper-line); }
+  .brand-eyebrow {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .site-id { text-align: right; }
+  .site-name { font-family: var(--display); font-size: 15px; font-weight: 600; color: var(--text); }
+  .site-slug { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .flag-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--flag-tint); color: var(--flag);
+    border: 1px solid #b5471f33; border-radius: 999px;
+    padding: 5px 12px; font-size: 12px; font-weight: 700;
+    font-family: var(--body);
+  }
+  .flag-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--flag); }
+
+  button { font-family: var(--body); cursor: pointer; }
+  .btn-ghost {
+    background: transparent; color: var(--text-dim); border: 1px solid var(--paper-line);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+  }
+  .btn-ghost:hover { border-color: var(--brass-deep); color: var(--text); }
+  .btn-primary {
+    background: var(--ink); color: #fdf8ee; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 13.5px; font-weight: 700;
+  }
+  .btn-primary:hover { background: var(--ink-soft); }
+  .btn-secondary {
+    background: var(--paper); color: var(--text); border: 1px solid var(--paper-line);
+    border-radius: 7px; padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+  }
+  .btn-secondary:hover { border-color: var(--brass-deep); }
+  .btn-danger {
+    background: var(--paper); color: var(--red); border: 1px solid #a4432c40;
+    border-radius: 7px; padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+  }
+  .btn-danger:hover { background: #a4432c0f; }
+
+  /* -- login ------------------------------------------------------- */
+  .login-wrap { max-width: 400px; margin: 0 auto; padding: 90px 24px; }
+  .login-eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brass); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .login-eyebrow::before { content: "\25cf"; font-size: 8px; color: var(--moss); }
+  .login-wrap h1 {
+    font-family: var(--display); font-size: 30px; font-weight: 500; margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .login-wrap h1 em { font-style: italic; color: var(--brass); font-weight: 500; }
+  .login-lede { font-size: 14px; color: var(--text-dim); margin: 0 0 28px; line-height: 1.55; }
+  .card {
+    background: var(--paper); border-radius: 14px; padding: 28px;
+    box-shadow: 0 20px 45px -22px rgba(74,52,20,0.35);
+  }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  input, textarea {
+    width: 100%; padding: 10px 13px; border: 1.5px solid var(--paper-line); border-radius: 9px;
+    background: #fff; font-family: var(--body); font-size: 14px; color: var(--text);
+    margin-bottom: 16px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input::placeholder, textarea::placeholder { color: #b3a892; }
+  input:focus, textarea:focus {
+    outline: none; border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass-tint);
+  }
+  textarea { min-height: 88px; resize: vertical; }
+  .error {
+    color: var(--red); background: #a4432c14; border: 1px solid #a4432c33; border-radius: 8px;
+    padding: 10px 13px; font-size: 13px; margin: 4px 0 16px;
+  }
+  .login-footer { margin-top: 20px; text-align: center; font-size: 13px; color: var(--text-dim); }
+  .login-footer a { font-weight: 600; }
+
+  /* -- dashboard ----------------------------------------------------- */
+  main { max-width: 760px; margin: 0 auto; padding: 36px 24px 100px; display: flex; flex-direction: column; gap: 28px; }
+  .section-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: baseline; gap: 8px;
+  }
+  .section-label .count { color: var(--brass); font-weight: 600; }
+  .section-label.urgent .count { color: var(--flag); }
+
+  .panel {
+    background: var(--paper); border-radius: 12px; padding: 22px 24px;
+    box-shadow: 0 14px 34px -24px rgba(74,52,20,0.3);
+  }
+  .panel + .panel { margin-top: 0; }
+  .panel-title { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  .panel-hint { font-size: 12.5px; color: var(--text-dim); margin: 0 0 16px; line-height: 1.5; }
+
+  .row {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
+    padding: 13px 0; border-top: 1px dashed var(--paper-line);
+  }
+  .row:first-child { border-top: none; padding-top: 2px; }
+  .row-title { font-weight: 700; font-size: 13.5px; color: var(--text); margin-bottom: 3px; }
+  .row-sub { color: var(--text-dim); font-size: 12.5px; line-height: 1.5; }
+  .row-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .empty-note { color: var(--text-dim); font-size: 13px; padding: 4px 0; }
+
+  .unanswered-row .row-title { color: var(--flag); }
+  .unanswered-row .row-title::before { content: "\201c"; }
+  .unanswered-row .row-title::after { content: "\201d"; }
+
+  .divider { border: none; border-top: 1px dashed var(--paper-line); margin: 18px 0; }
+
+  details.advanced { margin-top: 4px; }
+  details.advanced summary {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim); cursor: pointer; list-style: none;
+  }
+  details.advanced summary::-webkit-details-marker { display: none; }
+  details.advanced summary::before { content: "+ "; color: var(--brass); }
+  details.advanced[open] summary::before { content: "\2212 "; }
+  details.advanced[open] summary { margin-bottom: 16px; }
+
+  .success-note { color: var(--moss); font-size: 13px; }
+  .muted-note { color: var(--text-dim); font-size: 13px; }
+
+  input[type="file"] {
+    background: transparent; border: 1.5px dashed var(--paper-line); padding: 12px;
+    font-size: 13px; color: var(--text-dim); border-radius: 9px;
+  }
+
+  @media (max-width: 480px) {
+    .topbar { padding: 14px 18px; }
+    main { padding: 28px 16px 80px; }
+    .panel { padding: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.001ms !important; }
+  }
 </style>
 </head>
 <body>
 
-<div id="loginView" class="card" style="max-width:360px;margin:80px auto;">
-  <h2 style="margin-top:0;">Knowledge Admin Login</h2>
-  <label>Website ID</label>
-  <input id="loginWebsiteId" list="websiteIdSuggestions" placeholder="e.g. sunrise-bakery (shown when you registered)" />
-  <datalist id="websiteIdSuggestions">
-    <option value="hotel-001">hotel-001 (Demo Hotel)</option>
-    <option value="photo-002">photo-002 (Demo Photography)</option>
-  </datalist>
-  <label>Username</label>
-  <input id="loginUsername" placeholder="admin" />
-  <label>Password</label>
-  <input id="loginPassword" type="password" placeholder="********" />
-  <div class="muted" style="margin-bottom:12px;">Demo login: hotel-001 / admin / admin123</div>
-  <div id="loginError" class="error hidden"></div>
-  <button id="loginBtn" style="width:100%">Log In</button>
+<div id="loginView">
+  <div class="login-wrap">
+    <img src="/assets/vitalitysoft-logo.png" alt="Vitalitysoft" style="height:22px; width:auto; display:block; margin-bottom:20px;" />
+    <div class="login-eyebrow">AI Website Assistant &middot; Admin</div>
+    <h1>Welcome <em>back.</em></h1>
+    <p class="login-lede">Log in with the Website ID and the username and password you set when you registered.</p>
+    <div class="card">
+      <label>Website ID</label>
+      <input id="loginWebsiteId" placeholder="e.g. sunrise-bakery" />
+      <label>Username</label>
+      <input id="loginUsername" placeholder="e.g. owner" />
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+      <div id="loginError" class="error hidden"></div>
+      <button id="loginBtn" class="btn-primary" style="width:100%; padding:12px; font-size:14px;">Log In</button>
+    </div>
+    <p class="login-footer">New here? <a href="/register/">Register your business &rarr;</a></p>
+  </div>
 </div>
 
 <div id="appView" class="hidden">
-  <header>
-    <h1 id="pageTitle">Knowledge Admin</h1>
-    <button id="logoutBtn">Log out</button>
-  </header>
+  <div class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="/assets/vitalitysoft-logo.png" alt="Vitalitysoft" />
+      <span class="brand-sep"></span>
+      <span class="brand-eyebrow">Knowledge Admin</span>
+    </div>
+    <div class="topbar-right">
+      <span id="unansweredFlag" class="flag-chip hidden"><span class="dot"></span><span id="unansweredFlagCount"></span> need attention</span>
+      <div class="site-id">
+        <div class="site-name" id="siteNameOut">&nbsp;</div>
+        <div class="site-slug" id="siteSlugOut"></div>
+      </div>
+      <a href="/register/" class="btn-ghost">Register a site</a>
+      <button id="logoutBtn" class="btn-ghost">Log out</button>
+    </div>
+  </div>
+
   <main>
-    <div class="card">
-      <h3 id="formTitle" style="margin-top:0;">Add Knowledge Article</h3>
-      <label>Title / Question</label>
-      <input id="itemTitle" placeholder="e.g. What time is check-in?" />
-      <label>Content / Answer</label>
-      <textarea id="itemContent" placeholder="e.g. Check-in time is 12 PM."></textarea>
-      <div id="formError" class="error hidden"></div>
-      <button id="saveBtn">Add Article</button>
-      <button id="cancelEditBtn" class="secondary hidden">Cancel</button>
-    </div>
+    <section>
+      <div class="section-label urgent">Unanswered questions <span class="count" id="unansweredCount">0</span></div>
+      <div class="panel">
+        <p class="panel-hint">Real questions your assistant couldn't answer. Add a knowledge article below, then mark it handled.</p>
+        <div id="unansweredList"></div>
+        <p id="unansweredEmptyState" class="empty-note hidden">Nothing unanswered right now &mdash; you're all caught up.</p>
+      </div>
+    </section>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Articles (<span id="itemCount">0</span>)</h3>
-      <div id="itemList"></div>
-      <p id="emptyState" class="muted hidden">No knowledge articles yet. Add one above.</p>
-    </div>
+    <section>
+      <div class="section-label">Knowledge articles <span class="count" id="itemCount">0</span></div>
+      <div class="panel">
+        <h3 class="panel-title" id="formTitle">Add an article</h3>
+        <p class="panel-hint">A short question and its exact answer &mdash; returned to visitors word for word.</p>
+        <label>Title / Question</label>
+        <input id="itemTitle" placeholder="e.g. What time is check-in?" />
+        <label>Content / Answer</label>
+        <textarea id="itemContent" placeholder="e.g. Check-in is from 2 PM."></textarea>
+        <div id="formError" class="error hidden"></div>
+        <button id="saveBtn" class="btn-primary">Add Article</button>
+        <button id="cancelEditBtn" class="btn-secondary hidden" style="margin-left:8px;">Cancel</button>
+        <hr class="divider" />
+        <div id="itemList"></div>
+        <p id="emptyState" class="empty-note hidden">No knowledge articles yet &mdash; add one above.</p>
+      </div>
+    </section>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Upload a Document</h3>
-      <p class="muted" style="margin-top:-6px;">PDF, DOC, DOCX, or TXT (max 10MB). Its text becomes searchable knowledge automatically -- use this when your website's own content isn't readable by the chatbot (e.g. a single-page app), or you don't have a website content section covering something yet.</p>
-      <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt" style="margin-top:10px;" />
-      <div id="uploadError" class="error hidden" style="margin-top:10px;"></div>
-      <div id="uploadStatus" class="muted hidden" style="margin-top:10px;"></div>
-    </div>
+    <section>
+      <div class="section-label">Documents <span class="count" id="docCount">0</span></div>
+      <div class="panel">
+        <h3 class="panel-title">Upload a document</h3>
+        <p class="panel-hint">PDF, DOC, DOCX, or TXT (max 10MB). Its text becomes searchable knowledge automatically &mdash; useful when your website's own content isn't readable by the chatbot, or doesn't cover something yet.</p>
+        <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt" />
+        <div id="uploadError" class="error hidden"></div>
+        <div id="uploadStatus" class="hidden" style="margin-top:10px;"></div>
+        <hr class="divider" />
+        <div id="docList"></div>
+        <p id="docEmptyState" class="empty-note hidden">No documents uploaded yet.</p>
+      </div>
+    </section>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Documents (<span id="docCount">0</span>)</h3>
-      <div id="docList"></div>
-      <p id="docEmptyState" class="muted hidden">No documents uploaded yet.</p>
-    </div>
+    <section>
+      <details class="advanced">
+        <summary>Advanced &mdash; connect your own database</summary>
+        <div class="panel">
+          <p class="panel-hint">If your own backend implements our <a href="/register/CUSTOMER_API_CONTRACT.md" target="_blank">two-endpoint API contract</a>, enter its base URL and the chatbot will answer from your real bookings and inventory. Leave blank to rely on your website content, articles, and documents.</p>
+          <label>Live Data API URL</label>
+          <input id="customApiUrlInput" type="url" placeholder="https://api.yourbusiness.com" />
+          <div id="settingsError" class="error hidden"></div>
+          <div id="settingsStatus" class="hidden" style="margin-bottom:12px;"></div>
+          <button id="saveSettingsBtn" class="btn-secondary">Save</button>
+        </div>
+      </details>
+    </section>
   </main>
 </div>
 

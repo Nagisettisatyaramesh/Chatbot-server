@@ -19,6 +19,12 @@ const registerSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   adminUsername: z.string().min(3).max(50),
   adminPassword: z.string().min(6).max(200),
+  // Optional, self-service: a customer's own backend implementing our
+  // documented generic contract (see CUSTOMER_API_CONTRACT.md). Lets the
+  // chatbot answer from their real database with zero custom code on our
+  // side -- most businesses will leave this blank and rely on their
+  // website content plus knowledge articles instead.
+  customApiUrl: z.string().url().optional().or(z.literal("")),
 });
 
 // Public, self-service: anyone can register a new website and immediately
@@ -40,6 +46,7 @@ registerRouter.post(
       address: data.address ?? "",
       hours: data.hours ?? "",
       email: data.email ?? "",
+      ...(data.customApiUrl ? { customApiUrl: data.customApiUrl } : {}),
     });
 
     registerAdmin(website.websiteId, data.adminUsername.trim(), data.adminPassword);
