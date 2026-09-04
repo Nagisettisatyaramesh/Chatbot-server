@@ -11,7 +11,7 @@ import { extractBookingReference } from "../intent/extractBookingReference";
 import { detectSmallTalk } from "../intent/detectSmallTalk";
 import { getSession } from "../auth/session";
 import { fetchBookingByReference, fetchLiveRoomTypes, formatBookingStatus, formatRoomTypeSummary, mentionsSpecificRoomType, findMentionedRoomType } from "../integrations/liveHotelApi";
-import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem, mentionsSpecificItem, isBrowsingInventoryQuestion } from "../integrations/genericDataApi";
+import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem } from "../integrations/genericDataApi";
 
 export const FALLBACK_ANSWER = "I'm sorry, I don't have enough information to answer that.";
 
@@ -224,21 +224,6 @@ export async function answerQuestion(websiteId: string, message: string, session
     }
   }
 
-  // Same idea for a self-service customer's own inventory, but keyed off
-  // the QUESTION FORM ("what * do you have/offer") instead of a hardcoded
-  // noun like "room" -- their items could be classes, services, products,
-  // anything. Checked here, before content scoring, so a browsing
-  // question can't get hijacked by an unrelated section that just happens
-  // to share a word (e.g. a "Class Policies" FAQ for "what classes do you have").
-  if (site.customApiUrl && isBrowsingInventoryQuestion(message)) {
-    const items = await fetchGenericInventory(site.customApiUrl);
-    if (items.length > 0 && !mentionsSpecificItem(message, items)) {
-      sources.website = true;
-      const answer = items.map(formatInventoryItemSummary).join("\n\n");
-      return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
-    }
-  }
-
   // Priority 2 & 3: website content and knowledge base -- pure keyword
   // relevance matching, the winning article's content returned verbatim
   // (never rewritten or summarized, since there's no AI to do that).
@@ -265,18 +250,11 @@ export async function answerQuestion(websiteId: string, message: string, session
     return { answer: best.content, humanFallback: false, requiresLogin: false, callPhone: null, sources };
   }
 
-  // Priority 3.5: nothing matched a specific topic. If this tenant has NO
-  // other content at all (no knowledge articles, no readable website) but
-  // DOES have a connected database, list its inventory rather than giving
-  // up on real, available data -- this is what makes a database-only
-  // tenant (nothing else configured) still answer "what do you have"
-  // style questions. But if real knowledge articles or website content
-  // exist, a near-miss here should fall through to the honest fallback
-  // (and get logged as unanswered) instead of dumping an unrelated
-  // inventory list that has nothing to do with what was actually asked.
-  const hasOtherContent =
-    knowledgeItems.length > 0 || contentSections.some((s) => !s.id.startsWith("custom-inventory-") && !s.id.startsWith("live-room-type-"));
-  if (site.customApiUrl && !hasOtherContent) {
+  // Priority 3.5: nothing matched a specific topic, but a self-service
+  // customer's own inventory data exists (no hotel-shaped "room" trigger
+  // to key off generically) -- list all of it rather than giving up on
+  // real, available data.
+  if (site.customApiUrl) {
     const items = await fetchGenericInventory(site.customApiUrl);
     if (items.length > 0) {
       sources.website = true;

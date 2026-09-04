@@ -45,11 +45,6 @@ export function createApp() {
   // Self-service "install this on your website" sign-up page.
   app.use("/register", express.static(path.resolve(__dirname, "../public/register")));
 
-  // A local-only dummy business site for manually verifying the register
-  // -> install -> answer flow end to end. Not something a real deployment
-  // would ship.
-  app.use("/dummy-site", express.static(path.resolve(__dirname, "../public/dummy-site")));
-
   app.use("/api/chat", chatRouter);
   app.use("/api/chat-semantic", chatSemanticRouter);
   app.use("/api/website-config", websiteConfigRouter);
