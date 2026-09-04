@@ -5,13 +5,14 @@ import { getLiveData } from "../db/liveDataStore";
 import { getBookingsForUser, Booking } from "../db/bookingStore";
 import { getWebsiteContent } from "../content/websiteContentIngest";
 import { scoreMatchesSemantic } from "../lib/retrieval/semanticSearch";
+import { scoreMatches, ScorableDoc, ScoredDoc } from "../lib/retrieval/search";
 import { needsLiveData, hasAvailabilityWord } from "../intent/detectLiveDataIntent";
 import { isBookingStatusQuestion } from "../intent/detectBookingStatusIntent";
 import { extractBookingReference } from "../intent/extractBookingReference";
 import { detectSmallTalk } from "../intent/detectSmallTalk";
 import { getSession } from "../auth/session";
 import { fetchBookingByReference, fetchLiveRoomTypes, formatBookingStatus, formatRoomTypeSummary, mentionsSpecificRoomType, findMentionedRoomType } from "../integrations/liveHotelApi";
-import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem } from "../integrations/genericDataApi";
+import { fetchGenericBooking, fetchGenericInventory, formatInventoryItemSummary, findMentionedItem, mentionsSpecificItem, isBrowsingInventoryQuestion } from "../integrations/genericDataApi";
 import { AnswerResult, SourcesUsed, FALLBACK_ANSWER, WebsiteNotFoundError } from "./answerEngine";
 
 // This is a DELIBERATE near-duplicate of answerEngine.ts, not a refactor
@@ -21,6 +22,30 @@ import { AnswerResult, SourcesUsed, FALLBACK_ANSWER, WebsiteNotFoundError } from
 // between the two engines isolates exactly one variable: keyword overlap
 // (search.ts) vs. semantic similarity (semanticSearch.ts). See
 // routes/chatSemantic.routes.ts and public/compare.html.
+//
+// One deliberate exception: if semantic scoring finds nothing above its
+// similarity threshold, this engine retries with keyword matching before
+// giving up (see the "found nothing above threshold" comment below) --
+// short, literal queries against sparse factual content (an address, a
+// phone number) can score too low semantically even though the exact
+// word is sitting right there in the text. /compare/ still calls
+// /api/chat and /api/chat-semantic as fully separate requests, so this
+// doesn't affect that isolation -- it only changes what a real visitor
+// on the semantic endpoint actually experiences.
+
+function pickBest<T extends ScorableDoc>(
+  websiteMatches: ScoredDoc<T>[],
+  knowledgeMatches: ScoredDoc<T>[]
+): { content: string; from: "website" | "knowledgeBase" } | null {
+  const bestWebsite = websiteMatches[0];
+  const bestKnowledge = knowledgeMatches[0];
+  if (bestWebsite && bestKnowledge) {
+    return bestWebsite.score >= bestKnowledge.score ? { content: bestWebsite.doc.content, from: "website" } : { content: bestKnowledge.doc.content, from: "knowledgeBase" };
+  }
+  if (bestWebsite) return { content: bestWebsite.doc.content, from: "website" };
+  if (bestKnowledge) return { content: bestKnowledge.doc.content, from: "knowledgeBase" };
+  return null;
+}
 
 function formatBookings(bookings: Booking[]): string {
   if (bookings.length === 1) {
@@ -184,6 +209,17 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
     }
   }
 
+  // See answerEngine.ts -- same browsing-intent check for a self-service
+  // customer's own inventory, keyed off question form rather than a noun.
+  if (site.customApiUrl && isBrowsingInventoryQuestion(message)) {
+    const items = await fetchGenericInventory(site.customApiUrl);
+    if (items.length > 0 && !mentionsSpecificItem(message, items)) {
+      sources.website = true;
+      const answer = items.map(formatInventoryItemSummary).join("\n\n");
+      return { answer, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+    }
+  }
+
   // The one line that differs from answerEngine.ts: semantic similarity
   // instead of keyword overlap. Everything else about the priority order
   // and verbatim-answer behavior is identical.
@@ -195,26 +231,27 @@ export async function answerQuestionSemantic(websiteId: string, message: string,
     scoreMatchesSemantic(message, knowledgeItems),
   ]);
 
-  const bestWebsite = websiteMatches[0];
-  const bestKnowledge = knowledgeMatches[0];
-
-  let best: { content: string; from: "website" | "knowledgeBase" } | null = null;
-  if (bestWebsite && bestKnowledge) {
-    best = bestWebsite.score >= bestKnowledge.score ? { content: bestWebsite.doc.content, from: "website" } : { content: bestKnowledge.doc.content, from: "knowledgeBase" };
-  } else if (bestWebsite) {
-    best = { content: bestWebsite.doc.content, from: "website" };
-  } else if (bestKnowledge) {
-    best = { content: bestKnowledge.doc.content, from: "knowledgeBase" };
-  }
-
+  const best = pickBest(websiteMatches, knowledgeMatches);
   if (best) {
     sources[best.from] = true;
     return { answer: best.content, humanFallback: false, requiresLogin: false, callPhone: null, sources };
   }
 
+  // Found nothing above the semantic similarity threshold -- retry with
+  // keyword matching before giving up. See the file-header comment.
+  const keywordBest = pickBest(scoreMatches(message, contentSections), scoreMatches(message, knowledgeItems));
+  if (keywordBest) {
+    sources[keywordBest.from] = true;
+    return { answer: keywordBest.content, humanFallback: false, requiresLogin: false, callPhone: null, sources };
+  }
+
   // See answerEngine.ts Priority 3.5 -- list all inventory as a last
-  // resort for a self-service customer's own data rather than giving up.
-  if (site.customApiUrl) {
+  // resort ONLY when there's no other real content for this tenant at
+  // all, so a near-miss on an actual knowledge article doesn't get
+  // buried under an unrelated inventory dump.
+  const hasOtherContent =
+    knowledgeItems.length > 0 || contentSections.some((s) => !s.id.startsWith("custom-inventory-") && !s.id.startsWith("live-room-type-"));
+  if (site.customApiUrl && !hasOtherContent) {
     const items = await fetchGenericInventory(site.customApiUrl);
     if (items.length > 0) {
       sources.website = true;
